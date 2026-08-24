@@ -25,32 +25,36 @@ import argparse
 from typing import Dict, List, Tuple
 from datetime import datetime
 
-# 确保可以导入模块
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Windows 控制台默认 GBK 编码无法输出 emoji，强制 UTF-8
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
-from config import (
+# 确保可以导入模块（以包方式导入，支持相对导入）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from emotion_model.config import (
     ModelConfig, TrainingConfig,
     UNIFIED_EMOTIONS, EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION,
 )
-from base_encoder import CLIPEncoder, VisualEncoder, TextEncoder
-from fusion_module import (
+from emotion_model.base_encoder import CLIPEncoder, VisualEncoder, TextEncoder
+from emotion_model.fusion_module import (
     HierarchicalAttentionFusion,
     VisualEmotionAttention,
     TextEmotionAttention,
     GlobalAlignmentCalibration,
 )
-from classification_head import (
+from emotion_model.classification_head import (
     MultiLabelClassificationHead,
     LabelSpecificClassifier,
     SharedAttentionClassifier,
 )
-from label_association import (
+from emotion_model.label_association import (
     LabelAssociationModule,
     LightweightLabelGCN,
     build_emotion_label_graph,
     normalize_adjacency,
 )
-from full_model import MultiLabelEmotionModel
+from emotion_model.full_model import MultiLabelEmotionModel
 
 
 # ============================================================
@@ -724,7 +728,7 @@ def verify_config_and_utils(report: VerificationReport):
     # 6.3 工具函数
     print("\n  [6.3] 评估指标验证")
     try:
-        from utils import compute_metrics
+        from emotion_model.utils import compute_metrics
 
         N, L = 50, 12
         targets = torch.randint(0, 2, (N, L)).float()
@@ -744,7 +748,7 @@ def verify_config_and_utils(report: VerificationReport):
     # 6.4 设备检测
     print("\n  [6.4] 设备检测")
     try:
-        from utils import get_device
+        from emotion_model.utils import get_device
         device = get_device()
         report.check("设备检测成功", isinstance(device, torch.device),
                      f"设备: {device}")

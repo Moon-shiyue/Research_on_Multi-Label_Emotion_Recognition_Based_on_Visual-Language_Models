@@ -316,6 +316,17 @@ class LightweightLabelGCN(nn.Module):
         else:
             self.residual_proj = nn.Identity()
 
+        # 中间层残差投影（处理 hidden_dim 与输入维度不一致的情况）
+        self.intermediate_residual_projs = nn.ModuleList()
+        in_dim = input_dim
+        for i in range(num_layers):
+            out_dim = hidden_dim if i < num_layers - 1 else output_dim
+            if in_dim != out_dim:
+                self.intermediate_residual_projs.append(nn.Linear(in_dim, out_dim))
+            else:
+                self.intermediate_residual_projs.append(nn.Identity())
+            in_dim = out_dim
+
     def forward(
         self,
         fused_features: torch.Tensor,  # (B, num_labels, feature_dim)
@@ -342,10 +353,9 @@ class LightweightLabelGCN(nn.Module):
             x = norm(x)
             x = self.dropout(F.relu(x))
 
-            # 残差连接（适配维度）
-            if i == 0 and x.shape[-1] != residual.shape[-1]:
-                residual = torch.zeros_like(x)
-            x = x + residual
+            # 残差连接（每层维度不一致时用投影对齐）
+            residual_proj = self.intermediate_residual_projs[i]
+            x = x + residual_proj(residual)
 
         # 扩展到整个 batch
         gcn_features = x.unsqueeze(0).expand(B, -1, -1)  # (B, num_labels, output_dim)

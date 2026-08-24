@@ -7,6 +7,10 @@ import sys
 import os
 import json
 
+# Windows 控制台默认 GBK 编码无法输出 emoji，强制 UTF-8
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from qwenvl_emotion.config import (
@@ -72,31 +76,34 @@ def verify_config():
     from qwenvl_emotion.dataset import QwenVLEmotionDataset
 
     tmpdir = tempfile.mkdtemp()
-    os.makedirs(os.path.join(tmpdir, "images"), exist_ok=True)
-
-    for i in range(5):
-        img = Image.new("RGB", (448, 448), color=tuple(np.random.randint(0, 255, 3)))
-        img.save(os.path.join(tmpdir, "images", f"img_{i:03d}.jpg"))
-
-    import csv
-    with open(os.path.join(tmpdir, "labels.csv"), "w") as f:
-        w = csv.writer(f)
-        w.writerow(["filename"] + UNIFIED_EMOTIONS[:6])
-        for i in range(5):
-            row = [f"img_{i:03d}.jpg"] + [str(np.random.randint(0, 2)) for _ in range(6)]
-            w.writerow(row)
-
     try:
-        ds = QwenVLEmotionDataset(tmpdir, UNIFIED_EMOTIONS[:6], "train")
-        sample = ds[0]
-        print(f"  ✅ 数据集加载成功: {len(ds)} 样本")
-        print(f"     pixel_values: {sample['pixel_values'].shape}")
-        print(f"     pil_image: {sample['pil_image'].size}")
-        print(f"     labels: {sample['labels']}")
-    except Exception as e:
-        print(f"  ❌ 数据集加载失败: {e}")
+        os.makedirs(os.path.join(tmpdir, "images"), exist_ok=True)
+
+        for i in range(5):
+            img = Image.new("RGB", (448, 448), color=tuple(np.random.randint(0, 255, 3)))
+            img.save(os.path.join(tmpdir, "images", f"img_{i:03d}.jpg"))
+
+        import csv
+        with open(os.path.join(tmpdir, "labels.csv"), "w") as f:
+            w = csv.writer(f)
+            w.writerow(["filename"] + UNIFIED_EMOTIONS[:6])
+            for i in range(5):
+                row = [f"img_{i:03d}.jpg"] + [str(np.random.randint(0, 2)) for _ in range(6)]
+                w.writerow(row)
+
+        try:
+            ds = QwenVLEmotionDataset(tmpdir, UNIFIED_EMOTIONS[:6], "train")
+            sample = ds[0]
+            print(f"  ✅ 数据集加载成功: {len(ds)} 样本")
+            print(f"     pixel_values: {sample['pixel_values'].shape}")
+            print(f"     pil_image: {sample['pil_image'].size}")
+            print(f"     labels: {sample['labels']}")
+        except Exception as e:
+            print(f"  ❌ 数据集加载失败: {e}")
+    except PermissionError as e:
+        print(f"  ⚠ 临时目录不可写，跳过数据加载验证: {e}")
     finally:
-        shutil.rmtree(tmpdir)
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     # 6. 环境检测
     print("\n[6] 运行环境检测")

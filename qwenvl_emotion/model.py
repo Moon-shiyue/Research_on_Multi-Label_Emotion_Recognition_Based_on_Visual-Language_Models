@@ -33,6 +33,7 @@ from typing import Optional, Dict, List, Tuple
 import json
 import re
 import warnings
+import sys
 
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 from transformers import (
@@ -503,11 +504,19 @@ class QwenVLEmotionModel(nn.Module):
 # 快速测试
 # ============================================================
 if __name__ == "__main__":
+    # Windows 控制台默认 GBK 编码无法输出 emoji，强制 UTF-8
+    if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     print("=" * 60)
     print("Qwen2.5-VL 情感识别模型 — 配置测试")
     print("=" * 60)
 
-    from .config import QwenVLConfig, PROMPT_COT
+    import sys
+    import os
+    # 直接运行时脚本目录不在包路径中，需手动加入
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from qwenvl_emotion.config import QwenVLConfig, PROMPT_COT
 
     print(f"\n默认配置:")
     cfg = QwenVLConfig()

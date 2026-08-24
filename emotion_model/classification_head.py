@@ -57,13 +57,15 @@ class LabelSpecificClassifier(nn.Module):
         layers = []
         prev_dim = input_dim
         for h_dim in hidden_dims:
+            # 每个标签共享同层结构但拥有独立权重：
+            # 输入 (B, L, prev_dim) → 输出 (B, L, h_dim*L)，其中每个标签对应一段 h_dim 维
             layers.append(nn.Linear(prev_dim, h_dim * num_labels))
             layers.append(nn.GELU())
             layers.append(nn.Dropout(dropout))
-            prev_dim = h_dim
+            prev_dim = h_dim * num_labels
 
-        # 最后一层：h_dim → 1 (每个标签输出一个 logit)
-        layers.append(nn.Linear(prev_dim, num_labels))
+        # 最后一层：每个标签输出一个 logit
+        layers.append(nn.Linear(prev_dim, 1))
 
         self.classifier = nn.Sequential(*layers)
         self.num_labels = num_labels
@@ -86,7 +88,8 @@ class LabelSpecificClassifier(nn.Module):
         Returns:
             logits: (B, num_labels) 每个标签的原始 logits
         """
-        return self.classifier(x)
+        logits = self.classifier(x)  # (B, num_labels, 1)
+        return logits.squeeze(-1)    # (B, num_labels)
 
 
 class SharedAttentionClassifier(nn.Module):

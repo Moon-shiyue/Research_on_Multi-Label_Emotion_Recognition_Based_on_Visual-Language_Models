@@ -56,14 +56,20 @@ def parse_args():
                         help="恢复训练的 checkpoint 路径")
     parser.add_argument("--eval_only", action="store_true",
                         help="仅评估不训练")
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=8,
+                        help="梯度累积步数（等效 batch = batch_size × 累积步数）")
+    parser.add_argument("--max_grad_norm", type=float, default=1.0,
+                        help="梯度裁剪范数")
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
 
-def train_one_epoch(model, dataloader, optimizer, scheduler, epoch, args):
+def train_one_epoch(model, dataloader, optimizer, scheduler, epoch, train_config):
     """训练一个 epoch（生成式训练）"""
     model.model.train()
     loss_meter = AverageMeter()
+    accum_steps = train_config.gradient_accumulation_steps
+    max_grad_norm = train_config.max_grad_norm
 
     pbar = tqdm(dataloader, desc=f"Epoch {epoch}")
     for step, batch in enumerate(pbar):
@@ -78,18 +84,18 @@ def train_one_epoch(model, dataloader, optimizer, scheduler, epoch, args):
         loss = outputs.loss
 
         # 梯度累积
-        loss = loss / args.gradient_accumulation_steps
+        loss = loss / accum_steps
         loss.backward()
 
-        if (step + 1) % args.gradient_accumulation_steps == 0:
+        if (step + 1) % accum_steps == 0:
             torch.nn.utils.clip_grad_norm_(
-                model.model.parameters(), args.max_grad_norm
+                model.model.parameters(), max_grad_norm
             )
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
 
-        loss_meter.update(loss.item() * args.gradient_accumulation_steps)
+        loss_meter.update(loss.item() * accum_steps)
         pbar.set_postfix({"loss": f"{loss_meter.avg:.4f}",
                            "lr": f"{scheduler.get_last_lr()[0]:.2e}"})
 
@@ -147,6 +153,8 @@ def main():
         num_epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        max_grad_norm=args.max_grad_norm,
     )
 
     # 创建输出目录
@@ -168,6 +176,11 @@ def main():
     print("\n[1/4] 加载模型...")
     model = QwenVLEmotionModel(model_config)
     model.setup_lora()
+
+    # 恢复训练
+    if args.resume:
+        print(f"  恢复 LoRA 权重: {args.resume}")
+        model.load_lora(args.resume)
 
     # 数据
     print("\n[2/4] 加载数据...")

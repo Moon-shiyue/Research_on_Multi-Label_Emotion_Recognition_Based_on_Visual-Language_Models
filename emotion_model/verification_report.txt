@@ -1,0 +1,82 @@
+
+============================================================
+  验证报告摘要
+============================================================
+  总测试数: 69
+  通过: 69 ✅
+  失败: 0 ❌
+  警告: 0 ⚠️
+  耗时: 20.94s
+  时间: 2026-08-24T18:10:12.673871
+============================================================
+
+详细测试记录:
+  [PASS] 配置属性 clip_model_name: 值: openai/clip-vit-base-patch32
+  [PASS] 配置属性 visual_feature_dim: 值: 512
+  [PASS] 配置属性 text_feature_dim: 值: 512
+  [PASS] 配置属性 projection_dim: 值: 512
+  [PASS] 配置属性 fusion_hidden_dim: 值: 512
+  [PASS] 配置属性 fusion_num_heads: 值: 8
+  [PASS] 配置属性 num_emotions: 值: 12
+  [PASS] 配置属性 emotion_labels: 值: ['joy', 'sadness', 'anger', 'fear', 'surprise', 'disgust', 'love', 'peace', 'amusement', 'awe', 'contentment', 'excitement']
+  [PASS] 配置属性 use_label_association: 值: True
+  [PASS] 训练配置可用: 
+  [PASS] 统一标签非空: 共 12 个标签
+  [PASS] 共现关系已定义: 共 17 对
+  [PASS] 互斥关系已定义: 共 8 对
+  [PASS] 指标 f1_micro 存在: 值: 0.8
+  [PASS] 指标 f1_macro 存在: 值: 0.7975227018128791
+  [PASS] 指标 hamming_loss 存在: 值: 0.255
+  [PASS] 指标 mAP 存在: 值: 0.9169965349219679
+  [PASS] 设备检测成功: 设备: cpu
+  [PASS] CLIP 双塔编码器初始化: 
+  [PASS] 视觉全局特征维度: 实际: torch.Size([2, 512])
+  [PASS] 视觉 patch 特征维度: 实际: torch.Size([2, 49, 768])
+  [PASS] 文本特征维度: 实际: torch.Size([6, 512])
+  [PASS] 情感 prompt 生成: 示例: an image expressing joy and happiness
+  [PASS] 联合编码视觉特征: 实际: torch.Size([2, 512])
+  [PASS] 联合编码文本特征: 实际: torch.Size([6, 512])
+  [PASS] 情感加权的视觉特征维度: 实际: torch.Size([2, 12, 512])
+  [PASS] 注意力图形状: 实际: torch.Size(torch.Size([12, 49]))
+  [PASS] 视觉加权的文本特征维度: 实际: torch.Size([2, 12, 512])
+  [PASS] 全局校准特征维度: 实际: torch.Size([2, 12, 512])
+  [PASS] 校准特征非零: 校准输出全为零！
+  [PASS] 融合特征维度: 实际: torch.Size([2, 12, 512])
+  [PASS] 所有输出非 NaN: 检测到 NaN 值！
+  [PASS] 融合模块梯度反向传播: 梯度成功回传
+  [PASS] logits 维度: 
+  [PASS] 概率值域: 范围: [0.205, 0.263]
+  [PASS] 预测为二值: 
+  [PASS] logits 维度: 
+  [PASS] BCE 损失为标量: 值: 0.7639
+  [PASS] BCE 损失非负: 
+  [PASS] Asymmetric 损失非负: 值: 0.2652
+  [PASS] Focal 损失非负: 值: 0.2140
+  [PASS] 完美预测损失足够小: 值: 0.000046
+  [PASS] 错误预测损失大于完美预测: 完美: 0.0000, 错误: 10.0000
+  [PASS] 邻接矩阵形状: 
+  [PASS] 自连接为 1: 对角值: tensor([1., 1., 1., 1.])
+  [PASS] 正边（共现）存在: 共 34 条
+  [PASS] 负边（互斥）存在: 共 16 条
+  [PASS] 归一化矩阵形状: 
+  [PASS] 归一化无 NaN: 
+  [PASS] GCN 输出维度: 实际: torch.Size([4, 12, 512])
+  [PASS] GCN 输出无 NaN: 
+  [PASS] GCN 消息传递有效（节点输出有差异）: 节点间标准差: 0.561069
+  [PASS] 增强特征维度: 实际: torch.Size([4, 12, 512])
+  [PASS] 标签关系矩阵: 实际: torch.Size(torch.Size([12, 12]))
+  [PASS] 融合权重在合理范围: 当前权重: 0.6225
+  [PASS] 模型初始化成功: 
+  [PASS] logits 维度: 
+  [PASS] probabilities 维度: 
+  [PASS] predictions 维度: 
+  [PASS] 注意力图存在: 
+  [PASS] 中间特征存在: 
+  [PASS] 概率在 [0,1] 范围: 
+  [PASS] 梯度传播到多个模块: 有梯度的模块: {'encoder', 'fusion_module', 'label_association', 'classification_head'}
+  [PASS] 推理确定性: 两次推理结果一致
+  [PASS] bce 损失有效: 值: 0.724515
+  [PASS] asymmetric 损失有效: 值: 0.097620
+  [PASS] focal 损失有效: 值: 0.132486
+  [PASS] 模型有可训练参数: 
+  [PASS] 总参数量合理: 172.7M 参数

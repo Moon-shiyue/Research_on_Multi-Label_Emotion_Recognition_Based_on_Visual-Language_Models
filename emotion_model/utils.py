@@ -16,6 +16,11 @@ from datetime import datetime
 import time
 import json
 import os
+import sys
+
+# Windows 控制台默认 GBK 编码无法输出特殊符号，强制 UTF-8
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 
 # ============================================================
@@ -381,7 +386,13 @@ def load_checkpoint(
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    # 兼容 PyTorch 2.6+ 的 weights_only 默认值变化
+    # checkpoint 为本地自产文件（可信），需要加载完整的 dict（含 numpy 标量）
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    except TypeError:
+        # PyTorch < 2.6 不支持 weights_only 参数
+        checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     if optimizer is not None and "optimizer_state_dict" in checkpoint:

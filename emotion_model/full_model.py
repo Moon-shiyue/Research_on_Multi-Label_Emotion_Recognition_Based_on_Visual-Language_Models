@@ -59,10 +59,24 @@ import torch.nn as nn
 from typing import Optional, Dict, List, Tuple
 import warnings
 
-from .base_encoder import CLIPEncoder
-from .fusion_module import HierarchicalAttentionFusion
-from .classification_head import MultiLabelClassificationHead
-from .label_association import LabelAssociationModule
+# 兼容两种运行方式：
+#   1. 作为包导入:  python -m emotion_model.train / from emotion_model import ...
+#   2. 直接运行:    python emotion_model/full_model.py
+try:
+    from .base_encoder import CLIPEncoder
+    from .fusion_module import HierarchicalAttentionFusion
+    from .classification_head import MultiLabelClassificationHead
+    from .label_association import LabelAssociationModule
+    from .config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
+except ImportError:  # 直接运行脚本时相对导入不可用
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from base_encoder import CLIPEncoder
+    from fusion_module import HierarchicalAttentionFusion
+    from classification_head import MultiLabelClassificationHead
+    from label_association import LabelAssociationModule
+    from config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
 
 
 class MultiLabelEmotionModel(nn.Module):
@@ -129,7 +143,6 @@ class MultiLabelEmotionModel(nn.Module):
 
         # ---- 3. 标签关联建模模块 ----
         if model_config.use_label_association:
-            from .config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
             self.label_association = LabelAssociationModule(
                 num_labels=model_config.num_emotions,
                 feature_dim=fusion_dim,
@@ -360,11 +373,19 @@ class MultiLabelEmotionModel(nn.Module):
 # 快速测试
 # ============================================================
 if __name__ == "__main__":
+    # Windows 控制台默认 GBK 编码无法输出 emoji，强制 UTF-8
+    if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     print("=" * 60)
     print("完整模型集成测试")
     print("=" * 60)
 
-    from .config import ModelConfig
+    import sys
+    import os
+    # 直接运行时脚本目录不在包路径中，需手动加入
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from config import ModelConfig
 
     # 创建轻量测试配置
     config = ModelConfig(

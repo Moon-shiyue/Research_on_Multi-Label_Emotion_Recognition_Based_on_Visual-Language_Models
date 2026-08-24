@@ -311,42 +311,53 @@ def create_dataloaders(
     Returns:
         train_loader, val_loader, test_loader
     """
-    # 加载所有数据集
-    all_datasets = []
+    # 加载所有数据集（训练增强版 + 评估版）
+    train_datasets = []
+    eval_datasets = []
     for root in data_roots:
         if not os.path.exists(root):
             print(f"⚠ 数据集目录不存在，跳过: {root}")
             continue
 
-        ds = MultiLabelEmotionDataset(
+        train_datasets.append(MultiLabelEmotionDataset(
             data_root=root,
             emotion_labels=emotion_labels,
             split="train",
             image_size=image_size,
-        )
-        all_datasets.append(ds)
+            transform=get_default_transforms(image_size, is_train=True),
+        ))
+        eval_datasets.append(MultiLabelEmotionDataset(
+            data_root=root,
+            emotion_labels=emotion_labels,
+            split="val",
+            image_size=image_size,
+            transform=get_default_transforms(image_size, is_train=False),
+        ))
 
-    if not all_datasets:
+    if not train_datasets:
         raise ValueError("没有找到任何有效的数据集目录！")
 
     # 合并数据集
-    full_dataset = ConcatMultiLabelDataset(all_datasets)
+    train_full = ConcatMultiLabelDataset(train_datasets)
+    eval_full = ConcatMultiLabelDataset(eval_datasets)
 
-    # 划分训练/验证/测试
-    from torch.utils.data import random_split
-    total = len(full_dataset)
+    # 划分训练/验证/测试（两份数据集共享同一索引划分）
+    from torch.utils.data import random_split, Subset
+    total = len(train_full)
     test_size = int(total * test_split)
     val_size = int(total * val_split)
     train_size = total - val_size - test_size
 
+    indices = list(range(total))
     generator = torch.Generator().manual_seed(seed)
-    train_ds, val_ds, test_ds = random_split(
-        full_dataset, [train_size, val_size, test_size],
+    train_idx, val_idx, test_idx = random_split(
+        indices, [train_size, val_size, test_size],
         generator=generator,
     )
 
-    # 为训练集和验证/测试集设置不同的 transform
-    train_ds.dataset.transform = get_default_transforms(image_size, is_train=True)
+    train_ds = Subset(train_full, train_idx)          # 训练增强
+    val_ds = Subset(eval_full, val_idx)               # 无增强（稳定评估）
+    test_ds = Subset(eval_full, test_idx)             # 无增强（稳定评估）
 
     # 创建 DataLoader
     train_loader = DataLoader(

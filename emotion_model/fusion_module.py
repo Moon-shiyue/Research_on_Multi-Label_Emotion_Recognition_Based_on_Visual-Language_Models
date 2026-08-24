@@ -223,6 +223,7 @@ class VisualEmotionAttention(nn.Module):
         attended_visual, attn_weights = self.cross_attn(
             query=T,          # (B, num_labels, hidden_dim)
             key_value=V,      # (B, num_patches, hidden_dim)
+            return_attention=True,  # 返回注意力图用于可解释性分析
         )  # → (B, num_labels, hidden_dim)
 
         # 残差连接 + FFN

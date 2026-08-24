@@ -66,3 +66,5 @@ output/
 results/
 generated/
 我的分工.txt
+send_email.py
+mail_body.txt
