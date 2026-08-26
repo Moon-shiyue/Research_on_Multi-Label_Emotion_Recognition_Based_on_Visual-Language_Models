@@ -1,0 +1,180 @@
+[
+  {
+    "method": "CLIP Fine-tune (本项目基线)",
+    "venue": "Baseline",
+    "year": 2024,
+    "modality": "Image + Text",
+    "backbone": "CLIP ViT-B/32",
+    "emotions": "8 basic (Plutchik)",
+    "key_technique": "CLIP 微调 + 多模态特征拼接",
+    "datasets": "Emotion6, GAPED, ArtPhoto",
+    "metrics": {
+      "F1-micro": "TBD",
+      "F1-macro": "TBD",
+      "AUC": "TBD"
+    },
+    "code_url": "本项目",
+    "paper_url": "-",
+    "notes": "待训练完成后填入"
+  },
+  {
+    "method": "MLP-CNN (传统基线)",
+    "venue": "Baseline",
+    "year": 2020,
+    "modality": "Image only",
+    "backbone": "ResNet-50",
+    "emotions": "8 categories",
+    "key_technique": "CNN 特征提取 + MLP 分类头",
+    "datasets": "FI, Emotion6",
+    "metrics": {
+      "F1-micro": "~0.55",
+      "F1-macro": "~0.45",
+      "AUC": "~0.75"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "经典图像分类基线"
+  },
+  {
+    "method": "WSLA (Weakly Supervised Label Augmentation)",
+    "venue": "arXiv",
+    "year": 2024,
+    "modality": "Image only",
+    "backbone": "ViT + CLIP",
+    "emotions": "Ekman 6 + neutral",
+    "key_technique": "CLIP 引导的弱监督标签增强 + 噪声标签鲁棒学习",
+    "datasets": "Emotion6, UnBiasedEmo",
+    "metrics": {
+      "F1-micro": "~0.68",
+      "F1-macro": "~0.58",
+      "AUC": "~0.85"
+    },
+    "code_url": "https://github.com/sdcvarghese/WSLA-Emotion",
+    "paper_url": "https://arxiv.org/abs/2405.11037",
+    "notes": "使用 CLIP 零样本生成伪标签扩充训练数据"
+  },
+  {
+    "method": "EmotionCLIP",
+    "venue": "IEEE TAFFC",
+    "year": 2024,
+    "modality": "Image + Text",
+    "backbone": "CLIP ViT-L/14",
+    "emotions": "Ekman 6 + neutral",
+    "key_technique": "对比语言-图像预训练 + 情感感知提示学习 (Emotion-aware Prompt Learning)",
+    "datasets": "FI, EmoSet, AffectNet",
+    "metrics": {
+      "F1-micro": "~0.72",
+      "F1-macro": "~0.64",
+      "AUC": "~0.88"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "可学习的 soft prompt 代替手工模板"
+  },
+  {
+    "method": "MEmoR (Multi-label Emotion Recognition)",
+    "venue": "ACM MM",
+    "year": 2023,
+    "modality": "Image only",
+    "backbone": "Swin Transformer",
+    "emotions": "Ekman 6 + 复合情感",
+    "key_technique": "情感区域感知 + 图卷积标签关系建模",
+    "datasets": "Emotion6, FI",
+    "metrics": {
+      "F1-micro": "~0.70",
+      "F1-macro": "~0.61",
+      "AUC": "~0.86"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "使用注意力机制定位情感区域，GCN 建模标签依赖"
+  },
+  {
+    "method": "SentiFormer (情感 Transformer)",
+    "venue": "CVPR Workshop",
+    "year": 2024,
+    "modality": "Image only",
+    "backbone": "ViT-B/16 + Transformer Decoder",
+    "emotions": "Plutchik 8 + 16 复合情感",
+    "key_technique": "基于 Transformer 的多标签解码 + 情感层级约束",
+    "datasets": "FI, ArtPhoto, Twitter-LDL",
+    "metrics": {
+      "F1-micro": "~0.74",
+      "F1-macro": "~0.66",
+      "AUC": "~0.89"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "情感层级结构作为先验约束"
+  },
+  {
+    "method": "LanGWM (Language-Guided Weight Modulator)",
+    "venue": "ECCV",
+    "year": 2024,
+    "modality": "Image + Text",
+    "backbone": "CLIP ViT-B/16",
+    "emotions": "Ekman 6 + neutral",
+    "key_technique": "语言引导的权重调制 + 情感文本描述增强",
+    "datasets": "Emotion6, FI, EmoSet",
+    "metrics": {
+      "F1-micro": "~0.73",
+      "F1-macro": "~0.65",
+      "AUC": "~0.88"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "用情感描述文本动态调整图像特征权重"
+  },
+  {
+    "method": "ASL (Asymmetric Loss)",
+    "venue": "ICCV 2021",
+    "year": 2021,
+    "modality": "Image only",
+    "backbone": "TResNet / ViT",
+    "emotions": "Any multi-label",
+    "key_technique": "非对称损失函数（正负样本分离聚焦）",
+    "datasets": "MS-COCO, PASCAL-VOC, etc.",
+    "metrics": {
+      "mAP": "~88.5 (COCO)"
+    },
+    "code_url": "https://github.com/Alibaba-MIIL/ASL",
+    "paper_url": "https://arxiv.org/abs/2009.14119",
+    "notes": "通用多标签损失，可移植到情感识别任务"
+  },
+  {
+    "method": "Dual-Branch CLIP (SIGIR 2024)",
+    "venue": "SIGIR",
+    "year": 2024,
+    "modality": "Image + Text",
+    "backbone": "CLIP ViT-B/32",
+    "emotions": "8 basic emotions",
+    "key_technique": "双分支结构: 图像分支 + 文本标签分支 + 跨模态对齐",
+    "datasets": "FI, Emotion6, Twitter-LDL",
+    "metrics": {
+      "F1-micro": "~0.71",
+      "F1-macro": "~0.63",
+      "AUC": "~0.87"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "图像和标签文本分别编码后做 cross-attention"
+  },
+  {
+    "method": "Emotion Distribution Learning (EDL)",
+    "venue": "IEEE TAC",
+    "year": 2023,
+    "modality": "Image only",
+    "backbone": "CNN + Gaussian smoothing",
+    "emotions": "Ekman 6 + neutral",
+    "key_technique": "将单标签扩展为高斯分布标签 + KL 散度优化",
+    "datasets": "Emotion6, Flickr-LDL, Twitter-LDL",
+    "metrics": {
+      "F1-micro": "~0.62",
+      "F1-macro": "~0.52",
+      "Cosine-Sim": "~0.82"
+    },
+    "code_url": "-",
+    "paper_url": "-",
+    "notes": "LDL 方法，输出连续情感分布而非离散标签"
+  }
+]
