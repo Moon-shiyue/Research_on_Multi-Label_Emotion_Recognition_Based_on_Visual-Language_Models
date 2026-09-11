@@ -13,7 +13,7 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 
 两方案共享统一的情感标签体系与评估指标，用于论文对比实验。
 
-## 三大核心创新模块（申请书「研究内容」）
+## 三大核心创新模块
 
 方案A 在基础架构之上实现了申请书提出的三大创新模块（详见
 [`emotion_model/INNOVATION_MODULES.md`](emotion_model/INNOVATION_MODULES.md)）：
