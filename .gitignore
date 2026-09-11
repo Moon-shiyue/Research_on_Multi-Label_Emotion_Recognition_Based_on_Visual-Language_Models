@@ -65,6 +65,16 @@ logs/
 output/
 results/
 generated/
+
+# 内部材料（进展汇报、会议纪要等，不上传）
 我的分工.txt
 send_email.py
 mail_body.txt
+PROGRESS_REPORT.md
+*进展汇报*.md
+*周报*.md
+*月报*.md
+*会议纪要*.md
+*汇报*.docx
+*答辩提纲*
+*商业计划书*
