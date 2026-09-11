@@ -71,6 +71,7 @@ try:
     from .conflict_fusion import ConflictAwareFusionModule
     from .circular_head import (
         CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
+        CompoundEmotionHead, CircularConsistencyLoss,
         build_label_correlation_matrix,
     )
     from .vl_adapter import VLAdapterManager
@@ -85,6 +86,7 @@ except ImportError:  # 直接运行脚本时相对导入不可用
     from conflict_fusion import ConflictAwareFusionModule
     from circular_head import (
         CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
+        CompoundEmotionHead, CircularConsistencyLoss,
         build_label_correlation_matrix,
     )
     from vl_adapter import VLAdapterManager
@@ -228,6 +230,7 @@ class MultiLabelEmotionModel(nn.Module):
                 MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
             )
 
+            # ---- 头 1：多标记分类头（回答「有哪些情感」）----
             self.classification_head = CircularMultiLabelHead(
                 input_dim=fusion_dim,
                 num_labels=model_config.num_emotions,
@@ -237,13 +240,30 @@ class MultiLabelEmotionModel(nn.Module):
                 radius=getattr(model_config, "circular_radius", 1.0),
                 label_correlation_matrix=corr_matrix,
             )
-            # 环形损失（含与 KL 的联合权重）
+
+            # ---- 头 2：复合情感环形头（回答「整体落在环上哪里」）----
+            self.compound_head = CompoundEmotionHead(
+                input_dim=fusion_dim,
+                hidden_dim=model_config.classifier_hidden_dims[0],
+                dropout=model_config.fusion_dropout,
+                radius=getattr(model_config, "circular_radius", 1.0),
+            )
+
+            # 情感环形映射器（构造监督信号 / 反解分布）
+            self.circle_mapper = EmotionCircleMapper(num_labels=model_config.num_emotions)
+
+            # 渐进式环形损失（含角度先验软约束）
             self.circular_loss = ProgressiveCircularLoss(
                 mu=getattr(model_config, "circular_mu", 0.5),
                 angle_mode=getattr(model_config, "circular_angle_mode", "circular"),
+                angle_prior_weight=getattr(model_config, "circular_angle_prior_weight", 0.1),
             )
-            # 情感环形映射器（构造监督信号用）
-            self.circle_mapper = EmotionCircleMapper(num_labels=model_config.num_emotions)
+
+            # 双向一致性损失（连接两个头）
+            self.consistency_loss = CircularConsistencyLoss(
+                mapper=self.circle_mapper,
+                mode=getattr(model_config, "circular_consistency_mode", "kl"),
+            )
         else:
             self.classification_head = MultiLabelClassificationHead(
                 input_dim=fusion_dim,
@@ -254,7 +274,9 @@ class MultiLabelEmotionModel(nn.Module):
                 dropout=model_config.fusion_dropout,
                 label_smoothing=model_config.label_smoothing,
             )
+            self.compound_head = None
             self.circular_loss = None
+            self.consistency_loss = None
             self.circle_mapper = None
 
         self.num_emotions = model_config.num_emotions
@@ -385,10 +407,15 @@ class MultiLabelEmotionModel(nn.Module):
             fused_features = label_output["enhanced_features"]  # (B, num_labels, 512)
 
         # ============================================
-        # 4. 多标记分类（模块② 情感环形表示 或 通用多标记分类头）
+        # 4. 双头输出（模块② 情感环形表示 或 通用多标记分类头）
+        #    头1 多标记分类头 → 有哪些情感
+        #    头2 复合情感环形头 → 整体情感落在环上哪里
         # ============================================
+        compound_output = None
         if self.use_circular_head:
             cls_output = self.classification_head(fused_features, return_circle=True)
+            # 复合情感环形头（样本级输出）
+            compound_output = self.compound_head(fused_features, return_circle=True)
         else:
             cls_output = self.classification_head(fused_features, return_probs=True)
 
@@ -402,13 +429,23 @@ class MultiLabelEmotionModel(nn.Module):
             ),
         }
 
-        # 环形表示附加输出（模块②）
+        # 环形表示附加输出（模块② 头1：标签级）
         if self.use_circular_head:
             result["circle_vector"] = cls_output["circle_vector"]
             result["polarity_probs"] = cls_output["polarity_probs"]
             result["polarity_value"] = cls_output["polarity_value"]
             result["angle"] = cls_output["angle"]
+            result["angle_deviation"] = cls_output["angle_deviation"]
             result["intensity"] = cls_output["intensity"]
+
+        # 复合情感环形输出（模块② 头2：样本级）
+        if compound_output is not None:
+            result["compound_circle_vector"] = compound_output["circle_vector"]
+            result["compound_angle"] = compound_output["angle"]
+            result["compound_intensity"] = compound_output["intensity"]
+            result["compound_polarity_probs"] = compound_output["polarity_probs"]
+            result["compound_polarity_value"] = compound_output["polarity_value"]
+            result["compound_circle_outputs"] = compound_output
 
         # 冲突感知附加输出（模块①）
         if self.use_conflict_fusion:
@@ -448,23 +485,27 @@ class MultiLabelEmotionModel(nn.Module):
         计算损失（多目标联合损失）
 
         未启用核心模块时: L = 分类损失（BCE / 非对称 / Focal）
-        完整版: L = λ1·L_cls + λ2·L_PC + λ3·L_contrastive
-          - L_cls: 分类损失（非对称损失，解决标签不平衡）
-          - L_PC:  渐进式环形损失（模块②，刻画情感的极性-类型-强度）
-          - L_contrastive: 冲突对比损失（模块①，抑制模态内语义干扰）
+
+        完整版（双头 + 冲突感知）:
+            L = λ1·L_cls        分类损失（非对称损失，处理标签不平衡）
+              + λ2·L_angle      角度先验软约束（替代硬截断）
+              + λ3·L_PC         复合情感环形损失（头2 vs 标签构造的目标）
+              + λ4·L_consist    双头一致性损失（环形反解分布 ↔ 多标记预测）
+              + λ5·L_contrast   冲突对比损失（模块①）
 
         Args:
             logits: (B, num_labels) 预测 logits
             targets: (B, num_labels) 真实多热标签向量
             loss_type: "bce" | "asymmetric" | "focal"
-            circular_outputs: 分类头输出（模块②启用时传入，用于环形损失）
+            circular_outputs: 完整前向输出（模块②启用时传入）
             contrastive_loss: 冲突对比损失（模块①启用时传入）
-            loss_weights: 各损失项权重 {"cls": 1.0, "circular": 0.5, "contrastive": 0.3}
+            loss_weights: 各损失项权重
 
         Returns:
             loss: 标量损失
         """
-        weights = {"cls": 1.0, "circular": 0.5, "contrastive": 0.3}
+        weights = {"cls": 1.0, "angle": 0.1, "circular": 0.5,
+                   "consistency": 0.3, "contrastive": 0.3}
         if loss_weights:
             weights.update(loss_weights)
 
@@ -479,22 +520,47 @@ class MultiLabelEmotionModel(nn.Module):
 
         total = weights["cls"] * cls_loss
 
-        # ---- 渐进式环形损失（模块②）----
-        if self.use_circular_head and circular_outputs is not None and self.circular_loss is not None:
-            # 由多热标签构造环形监督信号 (p, θ, r)
-            with torch.no_grad():
-                target_vec = self.circle_mapper.distribution_to_vector(targets.float())
-                B, L = targets.shape
-                target_polarity = target_vec["polarity"].unsqueeze(-1).expand(B, L)
-                target_angle = target_vec["angle"].unsqueeze(-1).expand(B, L)
-                target_intensity = target_vec["intensity"].unsqueeze(-1).expand(B, L)
+        if self.use_circular_head and circular_outputs is not None:
+            B, L = targets.shape
 
-            pc = self.circular_loss(circular_outputs, {
-                "polarity": target_polarity,
-                "angle": target_angle,
-                "intensity": target_intensity,
-            })
-            total = total + weights["circular"] * pc["pc_loss"]
+            # 由多热标签构造环形监督信号：标签 → 归一化分布 → 复合情感向量
+            with torch.no_grad():
+                target_dist = targets.float() / \
+                    targets.float().sum(dim=-1, keepdim=True).clamp(min=1e-6)
+                target_vec = self.circle_mapper.distribution_to_vector(target_dist)
+
+            # ---- 角度先验软约束（头1，替代硬截断）----
+            if (self.circular_loss is not None
+                    and "angle_deviation" in circular_outputs):
+                prior = circular_outputs["angle_deviation"].pow(2).mean()
+                total = total + weights["angle"] * prior
+
+            # ---- 复合情感环形损失（头2：样本级复合向量）----
+            compound = circular_outputs.get("compound_circle_outputs")
+            if compound is not None and self.circular_loss is not None:
+                pred_pc = {
+                    "polarity_probs": compound["polarity_probs"].unsqueeze(1),
+                    "angle": compound["angle"].unsqueeze(1),
+                    # 复合头不对角度施加先验约束
+                    "angle_deviation": torch.zeros_like(compound["angle"]).unsqueeze(1),
+                    "intensity": compound["intensity"].unsqueeze(1),
+                }
+                target_pc = {
+                    "polarity": target_vec["polarity"].unsqueeze(1).expand(B, 1),
+                    "angle": target_vec["angle"].unsqueeze(1).expand(B, 1),
+                    "intensity": target_vec["intensity"].unsqueeze(1).expand(B, 1),
+                }
+                pc = self.circular_loss(pred_pc, target_pc)
+                total = total + weights["circular"] * pc["pc_loss"]
+
+            # ---- 双头一致性损失（环形反解分布 ↔ 多标记预测分布）----
+            if compound is not None and self.consistency_loss is not None:
+                cons = self.consistency_loss(
+                    compound,
+                    circular_outputs["probabilities"],
+                    targets=targets,
+                )
+                total = total + weights["consistency"] * cons["consistency_loss"]
 
         # ---- 冲突对比损失（模块①）----
         if contrastive_loss is not None:

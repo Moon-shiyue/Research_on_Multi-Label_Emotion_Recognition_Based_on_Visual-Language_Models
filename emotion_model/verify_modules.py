@@ -47,7 +47,8 @@ from emotion_model.conflict_fusion import (
     ConflictAwareAlignment, ConflictContrastiveLoss,
 )
 from emotion_model.circular_head import (
-    CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
+    CircularMultiLabelHead, CompoundEmotionHead, CircularConsistencyLoss,
+    EmotionCircleMapper, ProgressiveCircularLoss,
     CIRCULAR_EMOTIONS, EMOTION_ANGLES, build_label_correlation_matrix,
     polarity_of_angle,
 )
@@ -414,18 +415,77 @@ def verify_circular_head(report: VerificationReport):
                  bool((out["intensity"] > 0).all() and (out["intensity"] < 1).all()),
                  f"范围 [{out['intensity'].min():.3f}, {out['intensity'].max():.3f}]")
 
-    # 角度约束：预测角度应保持在先验角度 ±π/8 内（不跨越相邻情感）
-    angle_dev = []
-    for i, name in enumerate(CIRCULAR_EMOTIONS):
-        d = (out["angle"][:, i] - EMOTION_ANGLES[name]).abs()
-        d = torch.minimum(d, 2 * math.pi - d)
-        angle_dev.append(d.max().item())
-    report.check("★ 角度偏移受限于 ±π/8（保持情感类型可辨识）",
-                 max(angle_dev) <= math.pi / 8 + 1e-5,
-                 f"最大偏移 {max(angle_dev):.4f} ≤ {math.pi/8:.4f}")
+    # 方案C：角度改为软约束（移除 ±π/8 硬截断），使角度能真正学习复合情感位置
+    angle_dev = out["angle_deviation"]
+    report.check("角度偏离量已输出（供先验软约束使用）",
+                 "angle_deviation" in out and angle_dev.shape == (B, L),
+                 f"范围 [{angle_dev.min():.4f}, {angle_dev.max():.4f}] rad")
+    report.check("★ 角度可自由学习（硬截断已移除）",
+                 bool(angle_dev.max() > math.pi / 8),
+                 f"最大偏离先验 {angle_dev.max():.4f} rad > {math.pi/8:.4f}（原硬截断上限）")
 
     report.check("情感环形三维向量 (B,L,3)", out["circle_vector"].shape == (B, L, 3),
                  f"实际: {tuple(out['circle_vector'].shape)}")
+
+    # ---- 2.3b 复合情感环形头（双头设计之头2）----
+    print("\n  [2.3b] 复合情感环形头（样本级：整体落在环上哪里）")
+    compound_head = CompoundEmotionHead(input_dim=D, hidden_dim=256)
+    comp_out = compound_head(features)
+
+    report.check("复合极性输出 (B,3)", comp_out["polarity_probs"].shape == (B, 3),
+                 "样本级极性分布")
+    report.check("复合角度输出 (B,)", comp_out["angle"].shape == (B,),
+                 f"范围 [{comp_out['angle'].min():.3f}, {comp_out['angle'].max():.3f}] rad")
+    report.check("复合强度输出 (B,)", comp_out["intensity"].shape == (B,),
+                 f"范围 [{comp_out['intensity'].min():.3f}, {comp_out['intensity'].max():.3f}]")
+    report.check("复合情感三维向量 (B,3)", comp_out["circle_vector"].shape == (B, 3),
+                 "样本级环形表示")
+
+    # ---- 2.3c 双头一致性损失 ----
+    print("\n  [2.3c] 双头一致性损失（环形反解分布 ↔ 多标记预测分布）")
+    mapper_t = EmotionCircleMapper(num_labels=L)
+    cons_loss = CircularConsistencyLoss(mapper=mapper_t, mode="kl")
+
+    targets_t = torch.zeros(B, L)
+    targets_t[0, [0, 1]] = 1.0
+    targets_t[1, [2, 3]] = 1.0
+    targets_t[2, [4]] = 1.0
+    targets_t[3, [5, 6]] = 1.0
+
+    cons = cons_loss(comp_out, out["probabilities"], targets=targets_t)
+    report.check("一致性损失可计算", bool(torch.isfinite(cons["consistency_loss"])),
+                 f"L_consistency = {cons['consistency_loss'].item():.4f}")
+    report.check("跨头一致性项存在", "cross_head_loss" in cons,
+                 f"KL(环形分布 ‖ 多标记分布) = {cons['cross_head_loss'].item():.4f}")
+    report.check("反解分布已归一化",
+                 bool(torch.allclose(cons["circle_dist"].sum(dim=-1),
+                                     torch.ones(B), atol=1e-4)),
+                 f"求和: {cons['circle_dist'].sum(dim=-1)[0].item():.6f}")
+
+    # 语义验证：两个头输出一致时应获得更低的一致性损失
+    with torch.no_grad():
+        perfect_probs = torch.zeros(B, L)
+        for b in range(B):
+            perfect_probs[b] = targets_t[b]
+        # 让环形头输出与目标标签对应的复合向量一致
+        target_dist_t = targets_t / targets_t.sum(dim=-1, keepdim=True)
+        target_vec_t = mapper_t.distribution_to_vector(target_dist_t)
+        consistent_out = {
+            "angle": target_vec_t["angle"],
+            "intensity": target_vec_t["intensity"],
+        }
+        cons_good = cons_loss(consistent_out, perfect_probs, targets=targets_t)
+        # 冲突情形：环形头输出与标签完全错位
+        wrong_out = {
+            "angle": (target_vec_t["angle"] + math.pi) % (2 * math.pi),
+            "intensity": target_vec_t["intensity"],
+        }
+        cons_bad = cons_loss(wrong_out, perfect_probs, targets=targets_t)
+
+    report.check("★ 一致性损失语义正确（双头一致时损失更低）",
+                 cons_good["consistency_loss"] < cons_bad["consistency_loss"],
+                 f"一致 {cons_good['consistency_loss'].item():.4f} < "
+                 f"错位 {cons_bad['consistency_loss'].item():.4f}")
 
     # ---- 2.4 标签共现关联增强（申请书公式21）----
     print("\n  [2.4] 标签共现关联增强（y_i = σ(W·F + b + M·y_{-i})）")
@@ -768,6 +828,13 @@ def verify_integration(report: VerificationReport):
                  f"环形向量 {tuple(out['circle_vector'].shape)}")
     report.check("模块② 三分支输出",
                  all(k in out for k in ["polarity_probs", "angle", "intensity"]))
+    report.check("★ 模块② 双头输出（头2 复合情感环形向量）",
+                 "compound_circle_vector" in out,
+                 f"样本级复合向量 {tuple(out['compound_circle_vector'].shape)}"
+                 if "compound_circle_vector" in out else "缺失")
+    report.check("模块② 双头输出（头2 角度/强度）",
+                 all(k in out for k in ["compound_angle", "compound_intensity"]),
+                 "复合情感角度与强度")
     report.check("模块③ VL-Adapter 已挂载",
                  getattr(model, "_adapter_attached", False),
                  "已挂载到 CLIP 双塔各层")
@@ -789,7 +856,8 @@ def verify_integration(report: VerificationReport):
         circular_outputs=outputs,
         contrastive_loss=outputs.get("contrastive_loss"),
     )
-    report.check("联合损失可计算（分类+环形+对比）", bool(torch.isfinite(total_loss)),
+    report.check("联合损失可计算（分类+角度先验+环形+一致性+对比）",
+                 bool(torch.isfinite(total_loss)),
                  f"L_total = {total_loss.item():.4f}")
 
     total_loss.backward()

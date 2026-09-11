@@ -275,12 +275,17 @@ class ModelConfig:
     conflict_visual_boundary_init: float = 0.0 # 视觉冲突动态边界初值
     use_conflict_contrastive: bool = True      # 是否启用模态内对比学习损失
 
-    # ---- 模块② 情感环形表示多标记分类头 ----
+    # ---- 模块② 情感环形表示多标记分类头（双头设计）----
     use_circular_head: bool = False        # 关闭时改用通用多标记分类头（消融对照）
     circular_radius: float = 1.0           # 环形半径 r
     circular_mu: float = 0.5               # PC 损失与 KL 损失的权重（论文 Eq.10）
     circular_angle_mode: str = "circular"  # 角度误差模式: circular | raw
-    use_compound_emotion: bool = True      # 是否输出复合情感（两级标签体系）
+    circular_angle_prior_weight: float = 0.1
+    #   角度先验软约束权重：替代早先的 ±π/8 硬截断，允许角度自由学习
+    #   以表达复合情感位置，但偏离先验过远会被惩罚
+    circular_consistency_mode: str = "kl"
+    #   双头一致性度量：kl（KL 散度）| mse
+    use_compound_emotion: bool = True      # 是否输出复合情感（环形头 2）
 
     # ---- 模块③ VL-Adapter 跨场景泛化 ----
     use_vl_adapter: bool = False           # 启用参数解耦型适配器

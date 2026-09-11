@@ -1,4 +1,4 @@
-﻿"""
+"""
 情感环形表示多标记分类头
 Emotion Circle Representation Multi-Label Classification Head
 
@@ -368,12 +368,19 @@ class CircularMultiLabelHead(nn.Module):
         type_logits = self.type_branch(h).squeeze(-1)                   # (B, L)
         probabilities = torch.sigmoid(type_logits)                      # (B, L) 多标记置信度
 
-        # 角度 = 先验基本角度 + 预测偏移（偏移限制在 ±π/8，保证不跨越相邻情感）
+        # 角度 = 先验基本角度 + 可学习偏移
+        # 不设硬截断：偏移最大 ±π（自由），由角度先验软约束损失调节，
+        # 使模型能真正学出复合情感在环上的位置。
         angle_offset = torch.tanh(
             self.angle_offset_branch(h)
-        ).squeeze(-1) * (math.pi / 8)                                   # (B, L)
+        ).squeeze(-1) * math.pi                                         # (B, L) ∈ (-π, π)
         base = self.base_angles.view(1, L).expand(B, L)                 # (B, L)
         angle = (base + angle_offset) % (2 * math.pi)                   # (B, L)
+
+        # 角度相对先验的偏离量（供软约束损失使用）
+        angle_deviation = torch.abs(
+            torch.atan2(torch.sin(angle - base), torch.cos(angle - base))
+        )                                                               # (B, L) ∈ [0, π]
 
         # ---- 分支3: 强度回归 ----
         intensity = torch.sigmoid(
@@ -398,6 +405,7 @@ class CircularMultiLabelHead(nn.Module):
             "polarity_probs": polarity_probs,
             "polarity_value": polarity_value,
             "angle": angle,
+            "angle_deviation": angle_deviation,  # 相对先验角度的偏离（软约束用）
             "intensity": intensity,
         }
 
@@ -470,6 +478,7 @@ class ProgressiveCircularLoss(nn.Module):
         mu: float = 0.5,
         angle_mode: str = "circular",
         use_intensity_weight: bool = True,
+        angle_prior_weight: float = 0.1,
     ):
         """
         Args:
@@ -478,11 +487,16 @@ class ProgressiveCircularLoss(nn.Module):
                 - "circular": 环形距离 min(|Δθ|, 2π-|Δθ|)（推荐，尊重环形结构）
                 - "raw": 直接平方差（论文原始 Eq.8 形式）
             use_intensity_weight: 是否使用强度加权（论文 Eq.9）
+            angle_prior_weight: 角度先验软约束权重 λ_prior
+                用于替代早先的硬截断（±π/8）：模型可自由学习角度，
+                但偏离先验角度过远会被惩罚，既保留复合情感的表达能力，
+                又避免情感类型失去可辨识性。
         """
         super().__init__()
         self.mu = mu
         self.angle_mode = angle_mode
         self.use_intensity_weight = use_intensity_weight
+        self.angle_prior_weight = angle_prior_weight
 
     @staticmethod
     def circular_angle_error(pred_angle: torch.Tensor, target_angle: torch.Tensor) -> torch.Tensor:
@@ -546,11 +560,19 @@ class ProgressiveCircularLoss(nn.Module):
         else:
             pc_loss = polar_loss + type_loss
 
+        # ---- 第四步: 角度先验软约束（替代硬截断）----
+        # 允许角度自由学习以表达复合情感位置，但偏离先验过远会被惩罚
+        if self.angle_prior_weight > 0 and "angle_deviation" in pred:
+            prior_loss = pred["angle_deviation"].pow(2).mean()
+        else:
+            prior_loss = pred_angle.new_zeros(())
+
         return {
             "polar_loss": polar_loss,
             "type_loss": type_loss,
             "pc_loss": pc_loss,
-            "total": pc_loss,
+            "angle_prior_loss": prior_loss,
+            "total": pc_loss + self.angle_prior_weight * prior_loss,
         }
 
     def combine_with_distribution_loss(
@@ -608,6 +630,219 @@ def build_label_correlation_matrix(
                 M[idx[e2], idx[e1]] = -strength
 
     return M
+
+
+# ============================================================
+# 双头设计：复合情感环形头 + 双向一致性损失
+# ============================================================
+
+class CompoundEmotionHead(nn.Module):
+    """
+    复合情感环形头（双头设计中的第二个头）
+
+    设计动机:
+        多标记任务中，一张图常同时存在多个情感标签。此时环形表示的合理
+        用法不是「每个标签各自成环」，而是**每个情感是环上的一个基本方向，
+        多个标签通过向量叠加形成一个复合情感位置**（这正是 CVPR 2021
+        Emotion Circle 的建模逻辑）。
+
+    职责分工（双头结构）:
+        ┌──────────────────┬──────────────────────┐
+        │ 多标记分类头      │ 复合情感环形头（本类） │
+        │ → 8 类 one-hot   │ → 复合向量 (p, θ, r)  │
+        │ 「有哪些情感」    │ 「整体落在环上哪里」   │
+        └──────────────────┴──────────────────────┘
+
+    实现:
+        1. 注意力池化把标签级特征聚合成样本级表示（不同情感贡献不同权重）
+        2. 回归出复合情感的极性 p、角度 θ、强度 r
+        3. 角度自由预测（不设硬截断），由 ProgressiveCircularLoss 监督
+    """
+
+    def __init__(
+        self,
+        input_dim: int = 512,
+        hidden_dim: int = 256,
+        dropout: float = 0.1,
+        radius: float = 1.0,
+    ):
+        super().__init__()
+        self.input_dim = input_dim
+        self.radius = radius
+
+        # 注意力池化：(B, L, D) → (B, D)
+        self.pool_score = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim // 2),
+            nn.GELU(),
+            nn.Linear(hidden_dim // 2, 1),
+        )
+        self.pool_norm = nn.LayerNorm(input_dim)
+
+        # 复合向量回归分支
+        self.shared = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+        self.polarity_head = nn.Linear(hidden_dim, 3)      # 极性：积极/中性/消极
+        self.angle_head = nn.Linear(hidden_dim, 1)         # 角度 θ ∈ [0, 2π)
+        self.intensity_head = nn.Linear(hidden_dim, 1)     # 强度 r ∈ (0, 1)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in [self.polarity_head, self.angle_head, self.intensity_head]:
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        nn.init.constant_(self.intensity_head.bias, 0.5)
+
+    def forward(
+        self,
+        features: torch.Tensor,   # (B, L, D) 融合特征
+        return_circle: bool = True,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Returns:
+            dict:
+                - polarity_logits: (B, 3)
+                - polarity_probs:  (B, 3)
+                - polarity_value:  (B,) 连续极性值 ∈ (-1,1)
+                - angle:           (B,) 复合情感角度 θ ∈ [0, 2π)
+                - intensity:       (B,) 复合情感强度 r ∈ (0,1)
+                - circle_vector:   (B, 3) 三维坐标 (x, y, z)
+        """
+        B, L, D = features.shape
+
+        # 注意力池化：让不同情感以不同权重贡献到整体情感状态
+        scores = self.pool_score(features)                  # (B, L, 1)
+        weights = F.softmax(scores, dim=1)                  # (B, L, 1)
+        z = (features * weights).sum(dim=1)                 # (B, D)
+        z = self.pool_norm(z)
+
+        h = self.shared(z)                                   # (B, hidden)
+
+        polarity_logits = self.polarity_head(h)              # (B, 3)
+        polarity_probs = F.softmax(polarity_logits, dim=-1)
+        # 连续极性值：由三分类概率的期望值映射到 (-1, 1)
+        #   0=积极 → +1, 1=中性 → 0, 2=消极 → -1
+        levels = torch.tensor([1.0, 0.0, -1.0], device=h.device)
+        polarity_value = (polarity_probs * levels).sum(dim=-1)      # (B,)
+
+        angle = torch.sigmoid(self.angle_head(h)).squeeze(-1) * (2 * math.pi)  # (B,)
+        intensity = torch.sigmoid(self.intensity_head(h)).squeeze(-1)          # (B,)
+
+        result = {
+            "polarity_logits": polarity_logits,
+            "polarity_probs": polarity_probs,
+            "polarity_value": polarity_value,
+            "angle": angle,
+            "intensity": intensity,
+        }
+
+        if return_circle:
+            x = self.radius * intensity * torch.cos(angle)
+            y = self.radius * intensity * torch.sin(angle)
+            result["circle_vector"] = torch.stack([x, y, polarity_value], dim=-1)
+
+        return result
+
+
+class CircularConsistencyLoss(nn.Module):
+    """
+    双向一致性损失（连接多标记头与复合情感环形头）
+
+    两个方向:
+        正向（标签 → 环形）:
+            真实多热标签 → 归一化分布 → EmotionCircleMapper → 目标复合向量
+            再由 ProgressiveCircularLoss 监督环形头输出。
+            （该方向由 ProgressiveCircularLoss 承担，本类只负责反向）
+
+        反向（环形 → 标签）:
+            环形头预测的复合向量 → 反解标签分布 → 与多标记头的预测概率对齐。
+            作用：让环形表示为多标记预测提供结构先验，两个头互相印证。
+
+    一致性形式:
+        L_consistency = KL( 反解分布 ‖ 多标记预测分布 )
+    """
+
+    def __init__(
+        self,
+        mapper: "EmotionCircleMapper",
+        mode: str = "kl",
+        use_target_distribution: bool = True,
+    ):
+        """
+        Args:
+            mapper: 情感环形映射器（提供 vector_to_distribution 反解）
+            mode: 一致性度量方式
+                - "kl": KL 散度（推荐，分布对分布）
+                - "mse": 均方误差
+            use_target_distribution: 是否用真实标签分布作为对齐目标
+                （True 时两个头都与真实分布对齐，更稳定）
+        """
+        super().__init__()
+        self.mapper = mapper
+        self.mode = mode
+        self.use_target_distribution = use_target_distribution
+
+    @staticmethod
+    def _normalize(p: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+        """把非负分数归一化为分布"""
+        return p / p.sum(dim=-1, keepdim=True).clamp(min=eps)
+
+    def forward(
+        self,
+        circle_outputs: Dict[str, torch.Tensor],
+        multilabel_probs: torch.Tensor,     # (B, L)
+        targets: torch.Tensor = None,       # (B, L) 多热标签（可选）
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Returns:
+            dict: {consistency_loss, circle_dist, label_dist}
+        """
+        # ---- 环形头 → 反解标签分布 ----
+        circle_dist = self.mapper.vector_to_distribution(
+            circle_outputs["angle"], circle_outputs["intensity"]
+        )                                                       # (B, L)
+        circle_dist = self._normalize(circle_dist)
+
+        # ---- 多标记头 → 归一化预测分布 ----
+        label_dist = self._normalize(multilabel_probs)          # (B, L)
+
+        # ---- 对齐目标 ----
+        if self.use_target_distribution and targets is not None:
+            target_dist = self._normalize(targets.float() + 1e-6)
+        else:
+            target_dist = None
+
+        # ---- 一致性损失（环形分布 ↔ 多标记分布）----
+        if self.mode == "kl":
+            loss = F.kl_div(
+                (circle_dist + 1e-8).log(), label_dist, reduction="batchmean"
+            )
+        else:
+            loss = F.mse_loss(circle_dist, label_dist)
+
+        # ---- 若提供真实标签，两个头同时向真实分布对齐（增强稳定性）----
+        extra = circle_dist.new_zeros(())
+        if target_dist is not None:
+            if self.mode == "kl":
+                extra = F.kl_div(
+                    (circle_dist + 1e-8).log(), target_dist, reduction="batchmean"
+                )
+            else:
+                extra = F.mse_loss(circle_dist, target_dist)
+
+        total = loss + extra if target_dist is not None else loss
+
+        return {
+            "consistency_loss": total,
+            "cross_head_loss": loss,
+            "to_target_loss": extra,
+            "circle_dist": circle_dist,
+            "label_dist": label_dist,
+        }
 
 
 # ============================================================

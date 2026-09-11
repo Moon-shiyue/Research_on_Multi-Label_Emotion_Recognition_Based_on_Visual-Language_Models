@@ -21,12 +21,12 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 | 模块 | 解决的问题 | 核心机制 | 代码 |
 |------|-----------|---------|------|
 | **① 冲突感知跨模态融合** | 图文语义冲突（反讽）、模态内语义干扰 | 双路径冲突注意力 + 模态内对比学习 + 双向三元组排序损失 + 冲突感知对齐 | `conflict_fusion.py` |
-| **② 情感环形表示分类头** | 复合情感共存、强度差异建模 | Mikels Wheel 环形表示（极性-类型-强度三维）+ 三分支输出 + 渐进式环形损失 | `circular_head.py` |
+| **② 情感环形表示分类头** | 复合情感共存、强度差异建模 | Mikels Wheel 环形表示（极性-类型-强度三维）+ **双头设计**（多标记头 + 复合情感环形头 + 一致性约束） | `circular_head.py` |
 | **③ VL-Adapter 跨场景泛化** | 跨场景特征漂移、灾难性遗忘 | 参数解耦适配器（共享参数 + 域特定参数），可训练参数仅 4.57% | `vl_adapter.py` |
 
-**验证状态**：`verify_modules.py` — **102/102 项测试全部通过**
+**验证状态**：`verify_modules.py` — **115/115 项测试全部通过**
 
-## 情感标签体系（两级）
+## 情感标签体系
 
 **项目标签体系（8 类 Mikels 基础情感）** — 对应情感环形表示：
 ```
@@ -64,7 +64,7 @@ pip install -r requirements.txt
 # 2. 模块功能验证（无需数据集）
 cd emotion_model
 python verify.py                        # 基础组件验证（69 项）
-python verify_modules.py                # 三大核心模块验证（102 项）
+python verify_modules.py                # 三大核心模块验证（115 项）
 python verify_modules.py --module circular       # 单模块验证
 python verify_modules.py --output report.txt     # 输出验证报告
 
@@ -145,7 +145,7 @@ python verify.py
 │   ├── train.py            训练脚本（支持 --full / --ablation）
 │   ├── utils.py            评估指标/工具函数
 │   ├── verify.py           基础组件验证（69 项）
-│   ├── verify_modules.py   三大核心模块验证（102 项）
+│   ├── verify_modules.py   三大核心模块验证（115 项）
 │   ├── TECHNICAL_REPORT.md 基础架构技术说明
 │   ├── CORE_MODULES.md     ⭐ 三大核心模块技术实现说明
 │   ├── verification_report.txt          基础组件验证报告
@@ -165,6 +165,6 @@ python verify.py
 
 - `emotion_model/CORE_MODULES.md` — **三大核心模块技术实现**（「研究内容」对应）
 - `emotion_model/TECHNICAL_REPORT.md` — 基础架构技术说明（层次化融合/标签关联/非对称损失）
-- `emotion_model/module_verification_report.txt` — 核心模块验证报告（102/102 通过）
+- `emotion_model/module_verification_report.txt` — 核心模块验证报告（115/115 通过）
 - `qwenvl_emotion/README.md` — 双方案对比与实验设计建议
 - `数据集下载地址` — 各数据集官方地址
