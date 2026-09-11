@@ -1,9 +1,9 @@
-# 申请书核心创新模块 — 技术实现说明
+# 三大核心模块 — 技术实现说明
 
-> 本文档说明大创申请书「研究内容」中三大核心创新模块的**具体实现**，与
-> `TECHNICAL_REPORT.md`（基础版架构说明）配套阅读。
+> 本文档说明「研究内容」中三大核心模块的**具体实现**，与
+> `TECHNICAL_REPORT.md`（基础架构说明）配套阅读。
 >
-> 验证结果：**102/102 项测试全部通过**（详见 `innovation_verification_report.txt`）
+> 验证结果：**102/102 项测试全部通过**（详见 `module_verification_report.txt`）
 
 ---
 
@@ -264,8 +264,8 @@ L_align = MMD²(源域, 目标域) + 0.1·‖Cov_s - Cov_t‖²_F
 
 | 配置 | 标签数 | 模块① | 模块② | 模块③ | 可训练参数 |
 |------|--------|-------|-------|-------|-----------|
-| **基础版** | 12 | ✗ | ✗ | ✗ | 22.1M |
-| **创新版** | 8 | ✓ | ✓ | ✓ | 18.9M（11.15%） |
+| **消融基线** | 12 | ✗ | ✗ | ✗ | 22.1M |
+| **完整模型** | 8 | ✓ | ✓ | ✓ | 18.9M（11.15%） |
 
 ### 消融实验配置矩阵
 
@@ -273,7 +273,7 @@ L_align = MMD²(源域, 目标域) + 0.1·‖Cov_s - Cov_t‖²_F
 
 | 实验组 | 说明 |
 |--------|------|
-| `baseline` | 基础版（层次化融合 + 普通多标记头） |
+| `baseline` | 消融基线（核心模块全部关闭） |
 | `full` | 完整方案（三大模块全开） |
 | `w/o_conflict_fusion` | 移除模块① |
 | `w/o_circular_head` | 移除模块② |
@@ -283,11 +283,11 @@ L_align = MMD²(源域, 目标域) + 0.1·‖Cov_s - Cov_t‖²_F
 ### 使用方式
 
 ```python
-from emotion_model.config import create_innovation_config, create_ablation_configs
+from emotion_model.config import create_full_config, create_ablation_configs
 from emotion_model.full_model import MultiLabelEmotionModel
 
-# 创新版（完整方案）
-config = create_innovation_config()
+# 完整模型（三大核心模块）
+config = create_full_config()
 model = MultiLabelEmotionModel(config)
 
 # 训练时计算多目标联合损失
@@ -304,7 +304,7 @@ loss = model.compute_loss(
 
 ## 验证报告
 
-完整验证报告：`innovation_verification_report.txt`
+完整验证报告：`module_verification_report.txt`
 
 ```
 总测试数: 102
@@ -321,12 +321,12 @@ loss = model.compute_loss(
 
 运行方式：
 ```bash
-python emotion_model/verify_innovation.py                      # 全部验证
-python emotion_model/verify_innovation.py --module circular     # 单模块验证
-python emotion_model/verify_innovation.py --output report.txt   # 输出报告
+python emotion_model/verify_modules.py                      # 全部验证
+python emotion_model/verify_modules.py --module circular     # 单模块验证
+python emotion_model/verify_modules.py --output report.txt   # 输出报告
 ```
 
 ---
 
 *文档更新时间: 2026-09*
-*对应大创申请书「研究内容」（申新卓）*
+*对应「研究内容」技术方案*

@@ -3,9 +3,9 @@
 定义模型超参数、情感标签体系、训练参数等
 
 标签体系包含两级：
-  1. 12 类统一情感标签（UNIFIED_EMOTIONS）— 基础版，兼容多数据集
-  2. 8 类 Mikels 基础情感（MIKELS_BASIC_EMOTIONS）— 申请书要求，
-     对应 CVPR 2021 情感环形表示（Emotion Circle）
+  1. 12 类统一情感标签（UNIFIED_EMOTIONS）— 扩展标签集，兼容多数据集
+  2. 8 类 Mikels 基础情感（MIKELS_BASIC_EMOTIONS）— 项目采用的情感标签体系，
+     对应情感环形表示（Emotion Circle）
 """
 
 from dataclasses import dataclass, field
@@ -235,18 +235,18 @@ class ModelConfig:
     label_smoothing: float = 0.0       # 标签平滑
 
     # ========================================================
-    # 申请书「研究内容」三大核心创新模块开关
-    # 全部为 False 时 = 基础版（消融实验的对照组）
+    # 三大核心模块开关（对应「研究内容」的三项工作）
+    # 全部为 False 时 = 消融基线（逐项移除核心模块，用于对照实验）
     # ========================================================
 
     # ---- 模块① 注意力引导的冲突感知跨模态融合 ----
-    use_conflict_fusion: bool = False      # 替换基础版层次化融合
+    use_conflict_fusion: bool = False      # 关闭时改用层次化注意力融合（消融对照）
     conflict_text_boundary_init: float = 0.3   # 文本冲突动态边界初值
     conflict_visual_boundary_init: float = 0.0 # 视觉冲突动态边界初值
     use_conflict_contrastive: bool = True      # 是否启用模态内对比学习损失
 
     # ---- 模块② 情感环形表示多标记分类头 ----
-    use_circular_head: bool = False        # 替换基础版分类头
+    use_circular_head: bool = False        # 关闭时改用通用多标记分类头（消融对照）
     circular_radius: float = 1.0           # 环形半径 r
     circular_mu: float = 0.5               # PC 损失与 KL 损失的权重（论文 Eq.10）
     circular_angle_mode: str = "circular"  # 角度误差模式: circular | raw
@@ -263,11 +263,11 @@ class ModelConfig:
     use_mikels_basic: bool = False         # 使用 8 类 Mikels 基础情感（环形表示要求）
 
 
-def create_innovation_config(**overrides) -> "ModelConfig":
+def create_full_config(**overrides) -> "ModelConfig":
     """
-    创建启用三大核心创新模块的完整配置（申请书「研究内容」完整方案）
+    创建项目完整模型配置（三大核心模块全部启用）
 
-    对应论文实验矩阵中的「完整方案」（A-2），用于与基础版对照。
+    即「研究内容」中确定的技术方案：冲突感知融合 + 情感环形分类头 + VL-Adapter。
 
     启用内容:
       - 模块① 冲突感知跨模态融合（含模态内对比学习与三元组排序损失）
@@ -276,22 +276,22 @@ def create_innovation_config(**overrides) -> "ModelConfig":
       - 冻结 CLIP 编码器（配合 VL-Adapter 的参数高效微调策略）
 
     使用方式:
-        config = create_innovation_config(freeze_visual=True, freeze_text=True)
+        config = create_full_config()
         model = MultiLabelEmotionModel(config)
     """
     defaults = dict(
-        # 三大创新模块
+        # 三大核心模块
         use_conflict_fusion=True,
         use_circular_head=True,
         use_vl_adapter=True,
-        # 标签体系切换为 8 类 Mikels 基础情感（环形表示的前提）
+        # 标签体系采用 8 类 Mikels 基础情感（环形表示的前提）
         use_mikels_basic=True,
         num_emotions=len(MIKELS_BASIC_EMOTIONS),
         emotion_labels=MIKELS_BASIC_EMOTIONS,
         # 模块③ 要求冻结主干
         freeze_visual=True,
         freeze_text=True,
-        # 环形表示替代基础版标签关联（环形本身已建模标签关系）
+        # 环形表示自身已建模标签关系，不再叠加标签关联模块
         use_label_association=False,
     )
     defaults.update(overrides)
@@ -300,34 +300,36 @@ def create_innovation_config(**overrides) -> "ModelConfig":
 
 def create_ablation_configs() -> dict:
     """
-    生成消融实验配置集合（对应申请书的消融实验设计）
+    生成消融实验配置集合
+
+    以完整模型为基准，逐项移除核心模块，用于验证各模块的贡献。
 
     Returns:
         dict: {实验名: ModelConfig}
 
     实验组:
-        - baseline:  基础版（层次化融合 + 普通多标记头）
-        - full:      完整方案（三大模块全开）
-        - w/o_conflict_fusion:  移除模块①
-        - w/o_circular_head:    移除模块②（换回普通多标记头）
+        - full:                 完整模型（三大模块全开）
+        - w/o_conflict_fusion:  移除模块①（改用层次化注意力融合）
+        - w/o_circular_head:    移除模块②（改用通用多标记分类头）
         - w/o_vl_adapter:       移除模块③
         - w/o_contrastive:      仅移除模块①中的对比学习损失
+        - baseline:             消融基线（三项核心模块全部移除）
     """
     return {
+        "full": create_full_config(),
+        "w/o_conflict_fusion": create_full_config(use_conflict_fusion=False),
+        "w/o_circular_head": create_full_config(
+            use_circular_head=False, use_mikels_basic=False,
+            num_emotions=len(UNIFIED_EMOTIONS), emotion_labels=UNIFIED_EMOTIONS,
+        ),
+        "w/o_vl_adapter": create_full_config(use_vl_adapter=False),
+        "w/o_contrastive": create_full_config(use_conflict_contrastive=False),
         "baseline": ModelConfig(
             use_conflict_fusion=False,
             use_circular_head=False,
             use_vl_adapter=False,
             use_mikels_basic=False,
         ),
-        "full": create_innovation_config(),
-        "w/o_conflict_fusion": create_innovation_config(use_conflict_fusion=False),
-        "w/o_circular_head": create_innovation_config(
-            use_circular_head=False, use_mikels_basic=False,
-            num_emotions=len(UNIFIED_EMOTIONS), emotion_labels=UNIFIED_EMOTIONS,
-        ),
-        "w/o_vl_adapter": create_innovation_config(use_vl_adapter=False),
-        "w/o_contrastive": create_innovation_config(use_conflict_contrastive=False),
     }
 
 

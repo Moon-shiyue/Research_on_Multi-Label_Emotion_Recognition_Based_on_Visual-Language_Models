@@ -13,10 +13,10 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 
 两方案共享统一的情感标签体系与评估指标，用于论文对比实验。
 
-## 三大核心创新模块
+## 三大核心模块
 
-方案A 在基础架构之上实现了申请书提出的三大创新模块（详见
-[`emotion_model/INNOVATION_MODULES.md`](emotion_model/INNOVATION_MODULES.md)）：
+方案A 实现了「研究内容」中确定的三大核心模块（详见
+[`emotion_model/CORE_MODULES.md`](emotion_model/CORE_MODULES.md)）：
 
 | 模块 | 解决的问题 | 核心机制 | 代码 |
 |------|-----------|---------|------|
@@ -24,17 +24,17 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 | **② 情感环形表示分类头** | 复合情感共存、强度差异建模 | Mikels Wheel 环形表示（极性-类型-强度三维）+ 三分支输出 + 渐进式环形损失 | `circular_head.py` |
 | **③ VL-Adapter 跨场景泛化** | 跨场景特征漂移、灾难性遗忘 | 参数解耦适配器（共享参数 + 域特定参数），可训练参数仅 4.57% | `vl_adapter.py` |
 
-**验证状态**：`verify_innovation.py` — **102/102 项测试全部通过**
+**验证状态**：`verify_modules.py` — **102/102 项测试全部通过**
 
 ## 情感标签体系（两级）
 
-**基础版（12 类）** — 兼容 ArtPhoto/Emotion6/GAPED：
+**扩展标签集（12 类）** — 兼容 ArtPhoto/Emotion6/GAPED 等数据集：
 ```
 joy, sadness, anger, fear, surprise, disgust,
 love, peace, amusement, awe, contentment, excitement
 ```
 
-**创新版（8 类 Mikels 基础情感 + 复合情感）** — 对应情感环形表示：
+**项目标签体系（8 类 Mikels 基础情感 + 复合情感）** — 对应情感环形表示：
 ```
 amusement(22.5°), excitement(67.5°), anger(112.5°), disgust(157.5°),
 fear(202.5°), sadness(247.5°), awe(292.5°), contentment(337.5°)
@@ -46,7 +46,7 @@ fear(202.5°), sadness(247.5°), awe(292.5°), contentment(337.5°)
 
 架构：`CLIP双塔 → 层次化注意力融合 → 标签关联(GCN+Label Attention) → 多标记分类头`
 
-核心创新：
+核心设计：
 - **层次化跨模态融合**：局部高权重特征融合（视觉情绪注意力 + 文本情绪注意力）→ 全局对齐特征校准
 - **先验知识注入的标签关联建模**：有符号 GCN（共现正边/互斥负边）+ 数据驱动标签注意力
 - **非对称损失**：处理多标记场景的极端标签不平衡
@@ -59,17 +59,17 @@ pip install -r requirements.txt
 
 # 2. 模块功能验证（无需数据集）
 cd emotion_model
-python verify.py                        # 基础版模块验证（69 项）
-python verify_innovation.py             # 三大创新模块验证（102 项）
-python verify_innovation.py --module circular    # 单模块验证
-python verify_innovation.py --output report.txt  # 输出验证报告
+python verify.py                        # 基础组件验证（69 项）
+python verify_modules.py                # 三大核心模块验证（102 项）
+python verify_modules.py --module circular       # 单模块验证
+python verify_modules.py --output report.txt     # 输出验证报告
 
 # 3. 训练（需要数据）
-# 基础版（12 类标签）
+# 消融基线（12 类扩展标签，核心模块全部关闭）
 python -m emotion_model.train --data_root ./data/ArtPhoto ./data/Emotion6 --epochs 50
 
-# 创新版（8 类基础情感 + 三大核心模块，需冻结主干配合 VL-Adapter）
-python -m emotion_model.train --data_root ./data ./output_innovation --epochs 50 --innovation
+# 完整模型（8 类基础情感 + 三大核心模块，冻结主干配合 VL-Adapter）
+python -m emotion_model.train --data_root ./data --output ./output_full --epochs 50 --full
 
 # 消融实验（自动套用对应配置）
 python -m emotion_model.train --data_root ./data --ablation w/o_circular_head --epochs 50
@@ -78,7 +78,7 @@ python -m emotion_model.train --data_root ./data --ablation w/o_circular_head --
 #   --loss_type asymmetric|bce|focal    损失函数（默认 asymmetric）
 #   --freeze_visual --freeze_text       冻结 CLIP 编码器
 #   --no_label_association              禁用标签关联（消融）
-#   --innovation                        启用三大核心创新模块
+#   --full                              使用完整模型配置（三大核心模块）
 #   --ablation <name>                   消融配置：baseline/full/w_o_conflict_fusion/...
 #   --eval_only                         仅评估
 
@@ -128,23 +128,23 @@ python -m qwenvl_emotion.train --data_root ./data --epochs 5 --prompt_strategy c
 项目根目录/
 ├── emotion_model/          ← 方案A：CLIP 双塔融合
 │   ├── base_encoder.py     CLIP ViT + Text 编码器封装
-│   ├── conflict_fusion.py  ⭐⭐ 模块① 冲突感知跨模态融合（申请书创新点）
-│   ├── circular_head.py    ⭐⭐ 模块② 情感环形表示分类头（申请书创新点）
-│   ├── vl_adapter.py       ⭐⭐ 模块③ VL-Adapter 跨场景泛化（申请书创新点）
-│   ├── fusion_module.py    基础版层次化注意力融合（消融对照）
+│   ├── conflict_fusion.py  ⭐⭐ 模块① 冲突感知跨模态融合
+│   ├── circular_head.py    ⭐⭐ 模块② 情感环形表示分类头
+│   ├── vl_adapter.py       ⭐⭐ 模块③ VL-Adapter 跨场景泛化
+│   ├── fusion_module.py    层次化注意力融合（消融对照组件）
 │   ├── label_association.py GCN + Label Attention 标签关联
-│   ├── classification_head.py  基础版多标记分类头（BCE/ASL/Focal）
-│   ├── full_model.py       完整模型（支持基础版/创新版切换）
+│   ├── classification_head.py  通用多标记分类头（BCE/ASL/Focal，消融对照组件）
+│   ├── full_model.py       完整模型（支持完整配置/消融配置切换）
 │   ├── config.py           配置（两级标签体系/超参数/先验关系/消融配置）
 │   ├── dataset.py          数据加载
-│   ├── train.py            训练脚本（支持 --innovation / --ablation）
+│   ├── train.py            训练脚本（支持 --full / --ablation）
 │   ├── utils.py            评估指标/工具函数
-│   ├── verify.py           基础版模块验证（69 项）
-│   ├── verify_innovation.py 三大创新模块验证（102 项）
-│   ├── TECHNICAL_REPORT.md 基础版架构技术说明
-│   ├── INNOVATION_MODULES.md ⭐ 三大创新模块技术实现说明
-│   ├── verification_report.txt          基础版验证报告
-│   └── innovation_verification_report.txt 创新模块验证报告
+│   ├── verify.py           基础组件验证（69 项）
+│   ├── verify_modules.py   三大核心模块验证（102 项）
+│   ├── TECHNICAL_REPORT.md 基础架构技术说明
+│   ├── CORE_MODULES.md     ⭐ 三大核心模块技术实现说明
+│   ├── verification_report.txt          基础组件验证报告
+│   └── module_verification_report.txt     核心模块验证报告
 ├── qwenvl_emotion/         ← 方案B：Qwen2.5-VL LoRA
 │   ├── model.py            ⭐ Qwen-VL + LoRA 模型
 │   ├── config.py           配置 + Prompt 模板
@@ -158,8 +158,8 @@ python -m qwenvl_emotion.train --data_root ./data --epochs 5 --prompt_strategy c
 
 ## 相关文档
 
-- `emotion_model/INNOVATION_MODULES.md` — **三大核心创新模块技术实现**（申请书「研究内容」对应）
-- `emotion_model/TECHNICAL_REPORT.md` — 基础版架构技术说明（层次化融合/标签关联/非对称损失）
-- `emotion_model/innovation_verification_report.txt` — 创新模块验证报告（102/102 通过）
+- `emotion_model/CORE_MODULES.md` — **三大核心模块技术实现**（「研究内容」对应）
+- `emotion_model/TECHNICAL_REPORT.md` — 基础架构技术说明（层次化融合/标签关联/非对称损失）
+- `emotion_model/module_verification_report.txt` — 核心模块验证报告（102/102 通过）
 - `qwenvl_emotion/README.md` — 双方案对比与实验设计建议
 - `数据集下载地址` — 各数据集官方地址

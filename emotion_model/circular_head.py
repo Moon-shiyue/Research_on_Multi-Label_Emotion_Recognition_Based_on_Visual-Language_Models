@@ -1,4 +1,4 @@
-"""
+﻿"""
 情感环形表示多标记分类头
 Emotion Circle Representation Multi-Label Classification Head
 
@@ -391,7 +391,7 @@ class CircularMultiLabelHead(nn.Module):
             probabilities = torch.sigmoid(type_logits)
 
         result = {
-            "logits": type_logits,              # 与基础版分类头接口保持一致
+            "logits": type_logits,              # 与通用多标记分类头接口保持一致
             "type_logits": type_logits,
             "probabilities": probabilities,
             "polarity_logits": polarity_logits,

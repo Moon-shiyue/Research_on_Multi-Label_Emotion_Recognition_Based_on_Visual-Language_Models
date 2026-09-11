@@ -1,4 +1,4 @@
-"""
+﻿"""
 注意力引导的冲突感知跨模态融合模块
 Attention-Guided Conflict-Aware Cross-Modal Fusion
 
@@ -660,12 +660,12 @@ class ConflictAwareFusionModule(nn.Module):
     整合三个子模块，形成「文本端冲突提纯 → 视觉端冲突捕捉 → 跨模态对齐」的
     完整流程，输出冲突感知的多模态融合特征。
 
-    与基础版 HierarchicalAttentionFusion 的区别:
-      - 基础版：层次化注意力融合（局部→全局），无冲突建模
+    与层次化注意力融合 (HierarchicalAttentionFusion) 的区别:
+      - 层次化注意力融合：局部→全局渐进融合，无显式冲突建模
       - 本模块：显式建模图文情感冲突（反讽/极性对立场景），
                 引入模态内对比学习与三元组排序损失
 
-    输入输出接口与基础版保持一致，便于在完整模型中切换与消融对比。
+    输入输出接口与层次化注意力融合保持一致，便于在模型中切换与消融对比。
     """
 
     def __init__(
@@ -736,7 +736,7 @@ class ConflictAwareFusionModule(nn.Module):
 
         Args:
             visual_patches: ViT patch 特征 (B, P, 768)
-            visual_global: 视觉全局特征 (B, 512)，兼容基础版接口
+            visual_global: 视觉全局特征 (B, 512)，兼容通用接口
             text_features: 文本情感特征 (B, L, 512)
             text_token_features: 可选 token 级文本特征
             emotion_word_mask: 可选情感词掩码

@@ -1,8 +1,8 @@
 """
-申请书三大核心创新模块 — 功能验证脚本
-Verification for the Three Core Innovation Modules
+多标记情感识别模型 — 核心模块功能验证脚本
+Verification for the Three Core Modules
 
-对应大创申请书「研究内容」中的三大模块:
+对应「研究内容」中的三大核心模块:
   模块① 基于注意力引导的冲突感知跨模态融合
   模块② 基于情感环形表示的多标记分类头
   模块③ 基于 VL-Adapter 的跨场景情感特征泛化优化
@@ -13,9 +13,9 @@ Verification for the Three Core Innovation Modules
   3. 集成验证：与完整模型端到端集成、梯度回传、损失计算
 
 运行方式:
-    python verify_innovation.py                      # 运行全部验证
-    python verify_innovation.py --output report.txt  # 输出报告到文件
-    python verify_innovation.py --module circular    # 仅验证指定模块
+    python verify_modules.py                      # 运行全部验证
+    python verify_modules.py --output report.txt  # 输出报告到文件
+    python verify_modules.py --module circular    # 仅验证指定模块
 """
 
 import torch
@@ -40,7 +40,7 @@ from emotion_model.config import (
     MIKELS_POSITIVE, MIKELS_NEGATIVE, COMPOUND_EMOTION_RULES,
     MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
     map_to_compound_emotion, map_legacy_to_basic, multihot_12_to_8,
-    create_innovation_config, create_ablation_configs,
+    create_full_config, create_ablation_configs,
 )
 from emotion_model.conflict_fusion import (
     ConflictAwareFusionModule, TextConflictAttention, VisualConflictAttention,
@@ -100,7 +100,7 @@ class VerificationReport:
         elapsed = (datetime.now() - self.start_time).total_seconds()
         lines = [
             f"\n{'='*62}",
-            f"  三大核心创新模块 — 验证报告摘要",
+            f"  核心模块 — 验证报告摘要",
             f"{'='*62}",
             f"  总测试数: {total}",
             f"  通过: {self.passed} ✅",
@@ -218,7 +218,7 @@ def verify_conflict_fusion(report: VerificationReport):
     w_consistent = out_consistent["alignment_weights"].mean().item()
     w_conflict = out_conflict["alignment_weights"].mean().item()
     cmp_symbol = ">" if w_consistent > w_conflict else "≤"
-    report.check("★ 冲突场景对齐权重下降（核心创新语义）",
+    report.check("★ 冲突场景对齐权重下降（模块核心语义）",
                  w_conflict < w_consistent,
                  f"一致时 {w_consistent:.4f} {cmp_symbol} 冲突时 {w_conflict:.4f}")
     report.check("冲突程度量化正确",
@@ -701,12 +701,12 @@ def verify_vl_adapter(report: VerificationReport):
 
 
 # ============================================================
-# 集成验证：创新版 vs 基础版完整模型
+# 集成验证：完整模型与消融基线
 # ============================================================
 
 def verify_integration(report: VerificationReport):
     """验证三大模块与完整模型的端到端集成"""
-    report.section("集成验证：完整模型（创新版 / 基础版 / 消融配置）")
+    report.section("集成验证：完整模型与消融配置")
 
     from emotion_model.full_model import MultiLabelEmotionModel
 
@@ -714,23 +714,23 @@ def verify_integration(report: VerificationReport):
     dummy_images = torch.randn(B, 3, 224, 224)
 
     # ---- 4.1 配置系统 ----
-    print("\n  [4.1] 配置系统（创新版 / 消融实验矩阵）")
-    innov = create_innovation_config()
-    report.check("创新版配置启用三大模块",
-                 innov.use_conflict_fusion and innov.use_circular_head and innov.use_vl_adapter,
+    print("\n  [4.1] 配置系统（完整模型 / 消融实验矩阵）")
+    full_cfg = create_full_config()
+    report.check("完整模型配置启用三大模块",
+                 full_cfg.use_conflict_fusion and full_cfg.use_circular_head and full_cfg.use_vl_adapter,
                  "模块①②③ 全部启用")
-    report.check("创新版使用 8 类 Mikels 基础情感",
-                 innov.num_emotions == 8 and innov.emotion_labels == MIKELS_BASIC_EMOTIONS,
-                 f"{innov.num_emotions} 类: {innov.emotion_labels}")
-    report.check("创新版冻结 CLIP 主干（配合 VL-Adapter）",
-                 innov.freeze_visual and innov.freeze_text)
+    report.check("完整模型使用 8 类 Mikels 基础情感",
+                 full_cfg.num_emotions == 8 and full_cfg.emotion_labels == MIKELS_BASIC_EMOTIONS,
+                 f"{full_cfg.num_emotions} 类: {full_cfg.emotion_labels}")
+    report.check("完整模型冻结 CLIP 主干（配合 VL-Adapter）",
+                 full_cfg.freeze_visual and full_cfg.freeze_text)
 
     ablations = create_ablation_configs()
     report.check("消融实验配置矩阵齐全", len(ablations) == 6,
                  f"{list(ablations.keys())}")
 
-    # ---- 4.2 基础版完整模型（向后兼容）----
-    print("\n  [4.2] 基础版完整模型（12 类标签，向后兼容）")
+    # ---- 4.2 消融基线模型（核心模块全部关闭）----
+    print("\n  [4.2] 消融基线模型（12 类标签）")
     base_config = ModelConfig(freeze_visual=True, freeze_text=True, num_emotions=12)
     base_model = MultiLabelEmotionModel(base_config)
     base_model.eval()
@@ -738,23 +738,23 @@ def verify_integration(report: VerificationReport):
     with torch.no_grad():
         base_out = base_model(dummy_images, return_attention=True)
 
-    report.check("基础版 logits 维度 (B,12)", base_out["logits"].shape == (B, 12),
+    report.check("消融基线 logits 维度 (B,12)", base_out["logits"].shape == (B, 12),
                  f"实际: {tuple(base_out['logits'].shape)}")
-    report.check("基础版注意力图输出", base_out.get("attention_maps") is not None,
+    report.check("消融基线注意力图输出", base_out.get("attention_maps") is not None,
                  f"{tuple(base_out['attention_maps'].shape)}" if base_out.get("attention_maps") is not None else "无")
-    report.check("基础版不含创新模块输出",
+    report.check("消融基线不含核心模块输出",
                  "circle_vector" not in base_out and "conflict_scores" not in base_out,
                  "保持向后兼容")
 
-    # ---- 4.3 创新版完整模型（8 类标签 + 三大模块）----
-    print("\n  [4.3] 创新版完整模型（8 类基础情感 + 三大模块）")
-    model = MultiLabelEmotionModel(innov)
+    # ---- 4.3 完整模型（8 类标签 + 三大核心模块）----
+    print("\n  [4.3] 完整模型（8 类基础情感 + 三大核心模块）")
+    model = MultiLabelEmotionModel(full_cfg)
     model.eval()
 
     with torch.no_grad():
         out = model(dummy_images, return_attention=True)
 
-    report.check("创新版 logits 维度 (B,8)", out["logits"].shape == (B, 8),
+    report.check("完整模型 logits 维度 (B,8)", out["logits"].shape == (B, 8),
                  f"实际: {tuple(out['logits'].shape)}")
     report.check("模块① 冲突感知输出", "conflict_scores" in out and "cross_conflict" in out,
                  f"冲突分数 {tuple(out['conflict_scores'].shape)}")
@@ -799,7 +799,7 @@ def verify_integration(report: VerificationReport):
     print("\n  [4.5] 参数效率（VL-Adapter 轻量化）")
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    report.check("创新版可训练参数显著少于总参数",
+    report.check("完整模型可训练参数显著少于总参数",
                  trainable < total * 0.2,
                  f"可训练 {trainable:,} / 总 {total:,} = {100*trainable/total:.2f}%")
 
@@ -814,7 +814,7 @@ def verify_integration(report: VerificationReport):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="三大核心创新模块验证")
+    parser = argparse.ArgumentParser(description="核心模块功能验证")
     parser.add_argument("--module", type=str, default=None,
                         choices=["conflict", "circular", "adapter", "integration"],
                         help="仅验证指定模块")
@@ -822,8 +822,8 @@ def main():
     args = parser.parse_args()
 
     print("=" * 62)
-    print("  申请书三大核心创新模块 — 功能验证")
-    print("  Multi-Label Emotion Recognition: Innovation Modules")
+    print("  多标记情感识别模型 — 核心模块功能验证")
+    print("  Multi-Label Emotion Recognition: Core Modules")
     print("=" * 62)
     print(f"  时间: {datetime.now().isoformat()}")
     print(f"  PyTorch: {torch.__version__}")
@@ -845,7 +845,7 @@ def main():
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write("申请书三大核心创新模块 — 功能验证报告\n")
+            f.write("核心模块 — 功能验证报告\n")
             f.write(f"生成时间: {datetime.now().isoformat()}\n")
             f.write(f"PyTorch: {torch.__version__}\n")
             f.write(summary)

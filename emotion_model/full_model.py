@@ -1,4 +1,4 @@
-"""
+﻿"""
 完整的多标记情感识别模型
 Multi-Label Emotion Recognition Model
 
@@ -68,7 +68,7 @@ try:
     from .classification_head import MultiLabelClassificationHead
     from .label_association import LabelAssociationModule
     from .config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
-    # 申请书三大核心创新模块
+    # 三大核心模块（对应「研究内容」）
     from .conflict_fusion import ConflictAwareFusionModule
     from .circular_head import (
         CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
@@ -175,7 +175,7 @@ class MultiLabelEmotionModel(nn.Module):
             self.vl_adapter = None
             self._adapter_attached = False
 
-        # ---- 2. 融合模块：模块① 冲突感知融合 或 基础版层次化融合 ----
+        # ---- 2. 融合模块：模块① 冲突感知融合（关闭时改用层次化注意力融合）----
         self.use_conflict_fusion = getattr(model_config, "use_conflict_fusion", False)
         if self.use_conflict_fusion:
             self.fusion_module = ConflictAwareFusionModule(
@@ -225,7 +225,7 @@ class MultiLabelEmotionModel(nn.Module):
         else:
             self.label_association = None
 
-        # ---- 4. 分类输出头：模块② 情感环形表示 或 基础版多标记头 ----
+        # ---- 4. 分类输出头：模块② 情感环形表示（关闭时改用通用多标记分类头）----
         if self.use_circular_head:
             # 环形表示要求标签为 8 类 Mikels 基础情感
             if getattr(model_config, "use_mikels_basic", False):
@@ -286,9 +286,9 @@ class MultiLabelEmotionModel(nn.Module):
         print(f"  总参数量: {total_params:,}")
         print(f"  可训练参数: {trainable_params:,}")
         print(f"  冻结参数: {total_params - trainable_params:,}")
-        print(f"  ---- 创新模块 ----")
-        print(f"  模块① 冲突感知融合: {'启用' if self.use_conflict_fusion else '禁用（基础版融合）'}")
-        print(f"  模块② 情感环形分类头: {'启用' if self.use_circular_head else '禁用（基础版多标记头）'}")
+        print(f"  ---- 核心模块 ----")
+        print(f"  模块① 冲突感知融合: {'启用' if self.use_conflict_fusion else '未启用（消融配置）'}")
+        print(f"  模块② 情感环形分类头: {'启用' if self.use_circular_head else '未启用（消融配置）'}")
         print(f"  模块③ VL-Adapter: {'启用' if self.use_vl_adapter else '禁用'}"
               f"{'（已挂载 CLIP）' if self._adapter_attached else ''}")
         print(f"  标签关联模块: {'启用' if self.label_association else '禁用'}")
@@ -369,7 +369,7 @@ class MultiLabelEmotionModel(nn.Module):
                 text_token_features = None
 
         # ============================================
-        # 2. 跨模态融合（模块① 冲突感知 或 基础版层次化）
+        # 2. 跨模态融合（模块① 冲突感知 或 层次化注意力融合）
         # ============================================
         if self.use_conflict_fusion:
             fusion_output = self.fusion_module(
@@ -397,7 +397,7 @@ class MultiLabelEmotionModel(nn.Module):
             fused_features = label_output["enhanced_features"]  # (B, num_labels, 512)
 
         # ============================================
-        # 4. 多标记分类（模块② 情感环形表示 或 基础版）
+        # 4. 多标记分类（模块② 情感环形表示 或 通用多标记分类头）
         # ============================================
         if self.use_circular_head:
             cls_output = self.classification_head(fused_features, return_circle=True)
@@ -459,7 +459,7 @@ class MultiLabelEmotionModel(nn.Module):
         """
         计算损失（多目标联合损失）
 
-        基础版: L = 分类损失（BCE / 非对称 / Focal）
+        未启用核心模块时: L = 分类损失（BCE / 非对称 / Focal）
         完整版: L = λ1·L_cls + λ2·L_PC + λ3·L_contrastive
           - L_cls: 分类损失（非对称损失，解决标签不平衡）
           - L_PC:  渐进式环形损失（模块②，刻画情感的极性-类型-强度）
@@ -520,7 +520,7 @@ class MultiLabelEmotionModel(nn.Module):
         targets: torch.Tensor,
         loss_type: str = "bce",
     ) -> torch.Tensor:
-        """多标记分类损失（供环形分类头使用，与基础版公式一致）"""
+        """多标记分类损失（供环形分类头使用，损失公式保持一致）"""
         import torch.nn.functional as F
 
         if loss_type == "bce":
