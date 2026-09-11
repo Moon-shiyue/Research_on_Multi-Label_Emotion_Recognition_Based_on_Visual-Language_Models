@@ -4,19 +4,19 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 
 ## 项目简介
 
-基于视觉语言模型（VLM）的多标记情感识别研究，提供两套可对比的实验方案：
+基于视觉语言模型（VLM）的多标记情感识别研究。项目采用 **CLIP + 三大核心模块**的技术方案，
+围绕图文语义冲突、标签关系建模与跨场景泛化三个痛点展开。
 
-| 方案 | 目录 | 技术路线 | 特点 |
-|------|------|---------|------|
-| **方案A** | `emotion_model/` | CLIP (ViT-B/32) 双塔编码 + 冲突感知融合 + 情感环形分类头 + VL-Adapter | 模块化、可解释、可消融 |
-| **方案B** | `qwenvl_emotion/` | Qwen2.5-VL-3B + LoRA 轻量微调 | 原生多模态理解、Prompt 策略 |
-
-两方案共享统一的情感标签体系与评估指标，用于论文对比实验。
+| 目录 | 定位 | 内容 |
+|------|------|------|
+| `emotion_model/` | **项目技术方案** | CLIP (ViT-B/32) 双塔编码 + 冲突感知融合 + 情感环形分类头 + VL-Adapter |
+| `qwenvl_emotion/` | 早期技术路线探索记录 | Qwen2.5-VL-3B + LoRA 微调路线的调研与代码（未纳入最终方案，详见其 README） |
 
 ## 三大核心模块
 
-方案A 实现了「研究内容」中确定的三大核心模块（详见
+「研究内容」中确定的三大核心模块（详见
 [`emotion_model/CORE_MODULES.md`](emotion_model/CORE_MODULES.md)）：
+
 
 | 模块 | 解决的问题 | 核心机制 | 代码 |
 |------|-----------|---------|------|
@@ -42,14 +42,24 @@ fear(202.5°), sadness(247.5°), awe(292.5°), contentment(337.5°)
 复合情感示例: amusement+excitement → joy,  anger+disgust → contempt
 ```
 
-## 方案A：CLIP 双塔融合（emotion_model/）
+## 项目方案：CLIP 双塔 + 三大核心模块（emotion_model/）
 
-架构：`CLIP双塔 → 层次化注意力融合 → 标签关联(GCN+Label Attention) → 多标记分类头`
+**完整模型**（项目技术方案）：
 
-核心设计：
-- **层次化跨模态融合**：局部高权重特征融合（视觉情绪注意力 + 文本情绪注意力）→ 全局对齐特征校准
-- **先验知识注入的标签关联建模**：有符号 GCN（共现正边/互斥负边）+ 数据驱动标签注意力
-- **非对称损失**：处理多标记场景的极端标签不平衡
+```
+CLIP 双塔编码 → 模块①冲突感知融合 → 模块②情感环形分类头
+                     ↑
+              模块③ VL-Adapter（挂载双塔各层，跨场景泛化）
+```
+
+**消融对照组件**（关闭核心模块时启用的基础实现）：
+
+```
+CLIP 双塔编码 → 层次化注意力融合 → 标签关联(GCN + Label Attention) → 通用多标记分类头
+```
+
+前者用于实现「研究内容」的技术方案，后者在消融实验中作为对照，
+通过 `create_ablation_configs()` 可生成 6 组配置一键切换。
 
 ### 快速开始
 
@@ -94,22 +104,23 @@ python dataset.py               # 数据加载测试
 python full_model.py            # 完整模型测试
 ```
 
-## 方案B：Qwen2.5-VL LoRA 微调（qwenvl_emotion/）
+## 早期技术路线探索（qwenvl_emotion/）
 
-- Qwen2.5-VL-3B 基座 + LoRA（仅训练约 2% 参数）
+项目启动初期对「原生多模态大模型微调」路线做过调研与实现，**未纳入最终技术方案**，
+代码保留以供结题报告说明技术选型依据。
+
+- Qwen2.5-VL-3B 基座 + LoRA（约 2% 可训练参数）
 - 三种 Prompt 策略：Direct / CoT / Contrastive
 - 生成式训练（Next Token Prediction），输出结构化 JSON
 
-### 快速开始
+**未采用的原因**（详见 [`qwenvl_emotion/README.md`](qwenvl_emotion/README.md)）：
+与「研究内容」以 CLIP 为基座的三大模块不兼容；多标记输出需解析文本而非直接 sigmoid 置信度；
+显存需求 16GB（vs 8GB）且需额外下载 6-7GB 权重；可解释性分析难以直接获得注意力分布。
 
 ```bash
-# 验证配置（无需 GPU）
+# 配置验证（无需 GPU）
 cd qwenvl_emotion
 python verify.py
-
-# GPU 服务器训练
-python -m qwenvl_emotion.train --data_root ./data --epochs 5 --prompt_strategy cot
-# 显存不足时: --load_in_4bit
 ```
 
 ## 数据集
@@ -126,7 +137,7 @@ python -m qwenvl_emotion.train --data_root ./data --epochs 5 --prompt_strategy c
 
 ```
 项目根目录/
-├── emotion_model/          ← 方案A：CLIP 双塔融合
+├── emotion_model/          ← 项目技术方案：CLIP + 三大核心模块
 │   ├── base_encoder.py     CLIP ViT + Text 编码器封装
 │   ├── conflict_fusion.py  ⭐⭐ 模块① 冲突感知跨模态融合
 │   ├── circular_head.py    ⭐⭐ 模块② 情感环形表示分类头
@@ -145,7 +156,7 @@ python -m qwenvl_emotion.train --data_root ./data --epochs 5 --prompt_strategy c
 │   ├── CORE_MODULES.md     ⭐ 三大核心模块技术实现说明
 │   ├── verification_report.txt          基础组件验证报告
 │   └── module_verification_report.txt     核心模块验证报告
-├── qwenvl_emotion/         ← 方案B：Qwen2.5-VL LoRA
+├── qwenvl_emotion/         ← 早期技术路线探索记录（未纳入方案）
 │   ├── model.py            ⭐ Qwen-VL + LoRA 模型
 │   ├── config.py           配置 + Prompt 模板
 │   ├── train.py            训练脚本

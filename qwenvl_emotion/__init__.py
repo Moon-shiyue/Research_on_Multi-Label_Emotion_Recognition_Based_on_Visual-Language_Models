@@ -1,15 +1,13 @@
 """
-Qwen2.5-VL LoRA 微调 — 多标记情感识别
-Multi-Label Emotion Recognition via Vision-Language Model Fine-tuning
+Qwen2.5-VL LoRA 微调 — 技术路线探索记录
+Vision-Language Model Fine-tuning (Exploratory Implementation)
 
-与 emotion_model/ (CLIP方案) 形成对比实验：
-  - CLIP方案: 双塔编码 + 手写跨模态融合 + GCN标签关联
-  - Qwen-VL方案: 原生多模态模型 + LoRA微调 + Prompt策略
+本模块记录项目早期对「原生多模态大模型微调」路线的探索实现：
+  - 原生多模态模型 + LoRA 轻量微调 + Prompt 策略
 
-优势：
-  1. 模型天然理解情感语义，无需手写标签关联
-  2. LoRA 仅训练 ~2% 参数，单卡即可微调
-  3. 架构简洁，调参门槛低
+未纳入项目最终技术方案（最终方案为 CLIP + 三大核心模块，见 emotion_model/）。
+保留本模块用于记录技术选型的调研与论证过程。
+详见同目录 README.md。
 """
 
 __version__ = "0.1.0"
