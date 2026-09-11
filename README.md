@@ -28,13 +28,7 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 
 ## 情感标签体系（两级）
 
-**扩展标签集（12 类）** — 兼容 ArtPhoto/Emotion6/GAPED 等数据集：
-```
-joy, sadness, anger, fear, surprise, disgust,
-love, peace, amusement, awe, contentment, excitement
-```
-
-**项目标签体系（8 类 Mikels 基础情感 + 复合情感）** — 对应情感环形表示：
+**项目标签体系（8 类 Mikels 基础情感）** — 对应情感环形表示：
 ```
 amusement(22.5°), excitement(67.5°), anger(112.5°), disgust(157.5°),
 fear(202.5°), sadness(247.5°), awe(292.5°), contentment(337.5°)
@@ -75,7 +69,7 @@ python verify_modules.py --module circular       # 单模块验证
 python verify_modules.py --output report.txt     # 输出验证报告
 
 # 3. 训练（需要数据）
-# 消融基线（12 类扩展标签，核心模块全部关闭）
+# 消融基线（8 类标签，核心模块全部关闭）
 python -m emotion_model.train --data_root ./data/ArtPhoto ./data/Emotion6 --epochs 50
 
 # 完整模型（8 类基础情感 + 三大核心模块，冻结主干配合 VL-Adapter）
@@ -146,7 +140,7 @@ python verify.py
 │   ├── label_association.py GCN + Label Attention 标签关联
 │   ├── classification_head.py  通用多标记分类头（BCE/ASL/Focal，消融对照组件）
 │   ├── full_model.py       完整模型（支持完整配置/消融配置切换）
-│   ├── config.py           配置（两级标签体系/超参数/先验关系/消融配置）
+│   ├── config.py           配置（8 类标签体系/超参数/先验关系/消融配置）
 │   ├── dataset.py          数据加载
 │   ├── train.py            训练脚本（支持 --full / --ablation）
 │   ├── utils.py            评估指标/工具函数

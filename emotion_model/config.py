@@ -2,26 +2,28 @@
 全局配置文件
 定义模型超参数、情感标签体系、训练参数等
 
-标签体系包含两级：
-  1. 12 类统一情感标签（UNIFIED_EMOTIONS）— 扩展标签集，兼容多数据集
-  2. 8 类 Mikels 基础情感（MIKELS_BASIC_EMOTIONS）— 项目采用的情感标签体系，
-     对应情感环形表示（Emotion Circle）
+标签体系（全项目统一为单一体系）:
+  采用 Mikels Wheel 8 类基础情感（MIKELS_BASIC_EMOTIONS），
+  对应情感环形表示（Emotion Circle）。
+
+  历史扩展标签集（LEGACY_EXTENDED_EMOTIONS，12 类）仅为兼容早期版本的数据
+  格式而保留，**不作为模型输出空间**；如数据集使用该格式，需先用
+  multihot_12_to_8() 转换到 8 类基础情感。
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 
 # ============================================================
-# 情感标签体系
-# 基于 Ekman 六种基本情感 + ArtPhoto/GAPED 扩展情感
+# 各数据集原始标签定义（用于数据转换与追溯）
 # ============================================================
 
-# Ekman 六种基本情感
+# Ekman 六种基本情感 (Ekman, 1992)
 EKMAN_EMOTIONS = ["anger", "disgust", "fear", "joy", "sadness", "surprise"]
 
-# ArtPhoto 数据集扩展情感
+# ArtPhoto / FI 数据集标签（Mikels 8 类）
 ARTPHOTO_EMOTIONS = ["amusement", "anger", "awe", "contentment", "disgust",
                      "excitement", "fear", "sadness"]
 
@@ -31,8 +33,12 @@ EMOTION6_EMOTIONS = ["anger", "disgust", "fear", "joy", "sadness", "surprise"]
 # GAPED 情感标签
 GAPED_EMOTIONS = ["anger", "disgust", "fear", "sadness"]
 
-# 统一情感标签集（合并所有数据集的情感类别，用于多标记识别）
-UNIFIED_EMOTIONS = [
+# 历史扩展标签集（12 类）—— 仅用于兼容早期数据格式，不作为模型标签空间
+#
+# 构成：Ekman 6 类 + Mikels 独有的 4 类正性情感 + love/peace
+# 注意：love 与 peace 不属于 Ekman、Mikels 等经典情感模型，在 ArtPhoto /
+# Emotion6 / GAPED 中也没有对应标注，不建议继续使用。
+LEGACY_EXTENDED_EMOTIONS = [
     "joy", "sadness", "anger", "fear", "surprise", "disgust",
     "love", "peace", "amusement", "awe", "contentment", "excitement"
 ]
@@ -123,31 +129,55 @@ def map_to_compound_emotion(positive_emotions: List[str]) -> List[str]:
     return compounds
 
 
+# ============================================================
+# 12 类 → 8 类标签映射（数据预处理用）
+# ============================================================
+
+# 映射依据:
+#   1. Mikels et al. (2005) —— Mikels 8 类中的 4 类正性情感
+#      (amusement, awe, contentment, excitement) 是对 Ekman (1992) 单一
+#      "joy" 的细分，故 joy 的映射有明确理论出处。
+#   2. Russell (1980) 环形模型 —— 依据 valence-arousal 坐标就近映射。
+#
+# 映射类型:
+#   · 一对一（8 个）: sadness / anger / fear / disgust / amusement /
+#                     awe / contentment / excitement（本身即 Mikels 基础情感）
+#   · 一对多（2 个）: joy / surprise（Ekman 情感在 Mikels 体系中无单点对应）
+#   · 无依据（2 个）: love / peace —— 不属于 Ekman、Mikels 等经典情感模型，
+#                     映射仅为兼容旧数据格式，**不建议使用**
+LEGACY_TO_BASIC_MAPPING = {
+    # Ekman 的 joy → Mikels 的正性情感（Mikels et al. 2005）
+    "joy": ["amusement", "excitement"],
+    # Ekman 的 surprise 在 Mikels 8 类中无对应，按唤醒度就近映射
+    "surprise": ["excitement", "awe"],
+    # 以下两项无理论依据，仅作旧格式兼容
+    "love": ["contentment", "amusement"],
+    "peace": ["contentment", "awe"],
+}
+
+
 def map_legacy_to_basic(legacy_label: str) -> List[str]:
     """
-    旧 12 类标签 → 8 类基础情感映射（用于数据集标签体系转换）
+    旧 12 类标签 → 8 类基础情感映射
 
-    映射依据（语义/极性/唤醒度最接近）:
-        joy      → amusement, excitement
-        surprise → excitement, awe
-        love     → contentment, amusement
-        peace    → contentment, awe
-        其余标签本身即为 Mikels 基础情感
+    Args:
+        legacy_label: 旧标签体系中的情感标签
+
+    Returns:
+        对应的基础情感列表（可能一对多）
+
+    注意:
+        love / peace 不属于经典情感模型，映射缺乏理论与数据依据，
+        建议在数据侧直接剔除这两个标签，而非依赖映射。
     """
-    mapping = {
-        "joy": ["amusement", "excitement"],
-        "surprise": ["excitement", "awe"],
-        "love": ["contentment", "amusement"],
-        "peace": ["contentment", "awe"],
-    }
     if legacy_label in MIKELS_BASIC_EMOTIONS:
         return [legacy_label]
-    return mapping.get(legacy_label, [])
+    return LEGACY_TO_BASIC_MAPPING.get(legacy_label, [])
 
 
 def multihot_12_to_8(multihot: torch.Tensor) -> torch.Tensor:
     """
-    12 类多热标签 → 8 类基础情感多热标签
+    12 类多热标签 → 8 类基础情感多热标签（数据预处理工具）
 
     Args:
         multihot: (N, 12) 旧标签体系多热编码
@@ -159,7 +189,7 @@ def multihot_12_to_8(multihot: torch.Tensor) -> torch.Tensor:
     out = torch.zeros(N, len(MIKELS_BASIC_EMOTIONS))
     idx = {name: i for i, name in enumerate(MIKELS_BASIC_EMOTIONS)}
 
-    for j, legacy in enumerate(UNIFIED_EMOTIONS):
+    for j, legacy in enumerate(LEGACY_EXTENDED_EMOTIONS):
         if multihot[:, j].sum() == 0:
             continue
         for basic in map_legacy_to_basic(legacy):
@@ -218,8 +248,8 @@ class ModelConfig:
     fusion_num_layers: int = 2         # 层次化融合层数
 
     # ---- 多标记分类头 ----
-    num_emotions: int = 12             # 情感类别数 (= len(UNIFIED_EMOTIONS))
-    emotion_labels: List[str] = field(default_factory=lambda: UNIFIED_EMOTIONS)
+    num_emotions: int = len(MIKELS_BASIC_EMOTIONS)   # 情感类别数（8 类 Mikels 基础情感）
+    emotion_labels: List[str] = field(default_factory=lambda: list(MIKELS_BASIC_EMOTIONS))
     classifier_hidden_dims: List[int] = field(default_factory=lambda: [256, 128])
 
     # ---- 标签关联建模 ----
@@ -260,7 +290,8 @@ class ModelConfig:
     adapter_domain: int = 0                # 当前场景编号
 
     # ---- 标签体系 ----
-    use_mikels_basic: bool = False         # 使用 8 类 Mikels 基础情感（环形表示要求）
+    # 全项目统一采用 Mikels 8 类基础情感（由 num_emotions / emotion_labels 决定），
+    # 不再支持切换标签空间；不同标签格式的数据集请先用 multihot_12_to_8() 转换。
 
 
 def create_full_config(**overrides) -> "ModelConfig":
@@ -284,10 +315,9 @@ def create_full_config(**overrides) -> "ModelConfig":
         use_conflict_fusion=True,
         use_circular_head=True,
         use_vl_adapter=True,
-        # 标签体系采用 8 类 Mikels 基础情感（环形表示的前提）
-        use_mikels_basic=True,
+        # 标签体系：8 类 Mikels 基础情感
         num_emotions=len(MIKELS_BASIC_EMOTIONS),
-        emotion_labels=MIKELS_BASIC_EMOTIONS,
+        emotion_labels=list(MIKELS_BASIC_EMOTIONS),
         # 模块③ 要求冻结主干
         freeze_visual=True,
         freeze_text=True,
@@ -302,7 +332,11 @@ def create_ablation_configs() -> dict:
     """
     生成消融实验配置集合
 
-    以完整模型为基准，逐项移除核心模块，用于验证各模块的贡献。
+    以完整模型为基准，逐项移除核心模块，用于验证各模块贡献。
+
+    .. important::
+       所有配置使用**相同的 8 类 Mikels 标签空间**，仅改变模块开关，
+       以保证消融对比的公平性。
 
     Returns:
         dict: {实验名: ModelConfig}
@@ -318,17 +352,15 @@ def create_ablation_configs() -> dict:
     return {
         "full": create_full_config(),
         "w/o_conflict_fusion": create_full_config(use_conflict_fusion=False),
-        "w/o_circular_head": create_full_config(
-            use_circular_head=False, use_mikels_basic=False,
-            num_emotions=len(UNIFIED_EMOTIONS), emotion_labels=UNIFIED_EMOTIONS,
-        ),
+        # 仅替换分类头，标签空间保持 8 类不变
+        "w/o_circular_head": create_full_config(use_circular_head=False),
         "w/o_vl_adapter": create_full_config(use_vl_adapter=False),
         "w/o_contrastive": create_full_config(use_conflict_contrastive=False),
+        # 消融基线：关闭全部核心模块，标签空间仍为 8 类
         "baseline": ModelConfig(
             use_conflict_fusion=False,
             use_circular_head=False,
             use_vl_adapter=False,
-            use_mikels_basic=False,
         ),
     }
 

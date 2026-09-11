@@ -402,7 +402,7 @@ if __name__ == "__main__":
     print("数据集模块测试")
     print("=" * 60)
 
-    from config import UNIFIED_EMOTIONS
+    from config import MIKELS_BASIC_EMOTIONS
 
     # 创建模拟数据
     import tempfile
@@ -424,7 +424,7 @@ if __name__ == "__main__":
     # 创建模拟 CSV 标签
     labels_csv = os.path.join(tmpdir, "labels.csv")
     with open(labels_csv, "w", encoding="utf-8") as f:
-        header = ["filename"] + UNIFIED_EMOTIONS[:6]  # 仅用前6个
+        header = ["filename"] + MIKELS_BASIC_EMOTIONS[:6]  # 仅用前6个
         f.write(",".join(header) + "\n")
         for i in range(10):
             row = [f"img_{i:03d}.jpg"]
@@ -436,7 +436,7 @@ if __name__ == "__main__":
     print("\n[数据集加载测试]")
     ds = MultiLabelEmotionDataset(
         data_root=tmpdir,
-        emotion_labels=UNIFIED_EMOTIONS[:6],
+        emotion_labels=MIKELS_BASIC_EMOTIONS[:6],
         split="train",
     )
     print(f"  样本数: {len(ds)}")

@@ -1,4 +1,4 @@
-﻿"""
+"""
 完整的多标记情感识别模型
 Multi-Label Emotion Recognition Model
 
@@ -67,7 +67,6 @@ try:
     from .fusion_module import HierarchicalAttentionFusion
     from .classification_head import MultiLabelClassificationHead
     from .label_association import LabelAssociationModule
-    from .config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
     # 三大核心模块（对应「研究内容」）
     from .conflict_fusion import ConflictAwareFusionModule
     from .circular_head import (
@@ -83,7 +82,6 @@ except ImportError:  # 直接运行脚本时相对导入不可用
     from fusion_module import HierarchicalAttentionFusion
     from classification_head import MultiLabelClassificationHead
     from label_association import LabelAssociationModule
-    from config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
     from conflict_fusion import ConflictAwareFusionModule
     from circular_head import (
         CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
@@ -204,12 +202,8 @@ class MultiLabelEmotionModel(nn.Module):
         self.use_circular_head = getattr(model_config, "use_circular_head", False)
         use_la = model_config.use_label_association and not self.use_circular_head
         if use_la:
-            # 根据标签体系选择先验关系表
-            if getattr(model_config, "use_mikels_basic", False):
-                from .config import MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
-                cooc, mutex = MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
-            else:
-                cooc, mutex = EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
+            # 统一使用 Mikels 8 类基础情感的共现/互斥先验关系
+            from .config import MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
             self.label_association = LabelAssociationModule(
                 num_labels=model_config.num_emotions,
                 feature_dim=fusion_dim,
@@ -219,26 +213,20 @@ class MultiLabelEmotionModel(nn.Module):
                 gcn_num_layers=model_config.gcn_num_layers,
                 dropout=model_config.gcn_dropout,
                 emotion_labels=model_config.emotion_labels,
-                cooccurrence=cooc,
-                mutual_exclusion=mutex,
+                cooccurrence=MIKELS_COOCCURRENCE,
+                mutual_exclusion=MIKELS_MUTUAL_EXCLUSION,
             )
         else:
             self.label_association = None
 
         # ---- 4. 分类输出头：模块② 情感环形表示（关闭时改用通用多标记分类头）----
         if self.use_circular_head:
-            # 环形表示要求标签为 8 类 Mikels 基础情感
-            if getattr(model_config, "use_mikels_basic", False):
-                from .config import MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
-                corr_matrix = build_label_correlation_matrix(
-                    model_config.emotion_labels,
-                    MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
-                )
-            else:
-                corr_matrix = build_label_correlation_matrix(
-                    model_config.emotion_labels,
-                    EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION,
-                )
+            # 标签关联矩阵同样基于 Mikels 8 类先验关系
+            from .config import MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
+            corr_matrix = build_label_correlation_matrix(
+                model_config.emotion_labels,
+                MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
+            )
 
             self.classification_head = CircularMultiLabelHead(
                 input_dim=fusion_dim,

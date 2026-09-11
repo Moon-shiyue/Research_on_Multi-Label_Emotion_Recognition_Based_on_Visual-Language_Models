@@ -36,7 +36,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from emotion_model.config import (
-    ModelConfig, UNIFIED_EMOTIONS, MIKELS_BASIC_EMOTIONS,
+    ModelConfig, MIKELS_BASIC_EMOTIONS, LEGACY_EXTENDED_EMOTIONS,
     MIKELS_POSITIVE, MIKELS_NEGATIVE, COMPOUND_EMOTION_RULES,
     MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
     map_to_compound_emotion, map_legacy_to_basic, multihot_12_to_8,
@@ -503,13 +503,16 @@ def verify_circular_head(report: VerificationReport):
     report.check("复合情感规则数量", len(COMPOUND_EMOTION_RULES) == 8,
                  f"{len(COMPOUND_EMOTION_RULES)} 条环形相邻规则")
 
-    # 旧 12 类 → 8 类映射
-    legacy = torch.zeros(1, len(UNIFIED_EMOTIONS))
-    legacy[0, UNIFIED_EMOTIONS.index("joy")] = 1.0
+    # 旧 12 类 → 8 类映射（用旧标签集构造输入）
+    legacy = torch.zeros(1, len(LEGACY_EXTENDED_EMOTIONS))
+    legacy[0, LEGACY_EXTENDED_EMOTIONS.index("joy")] = 1.0
     mapped = multihot_12_to_8(legacy)
     report.check("12 类 → 8 类标签映射",
                  mapped.shape == (1, 8) and mapped[0, CIRCULAR_EMOTIONS.index("amusement")] == 1.0,
                  f"joy → amusement/excitement，映射后 {mapped.tolist()}")
+    report.check("映射不引入 love/peace（无依据标签）",
+                 all(x not in MIKELS_BASIC_EMOTIONS for x in ["love", "peace"]),
+                 "8 类基础情感中不含 love/peace")
 
     # ---- 2.7 梯度流 ----
     print("\n  [2.7] 梯度反向传播验证（覆盖三个分支）")
@@ -729,22 +732,25 @@ def verify_integration(report: VerificationReport):
     report.check("消融实验配置矩阵齐全", len(ablations) == 6,
                  f"{list(ablations.keys())}")
 
-    # ---- 4.2 消融基线模型（核心模块全部关闭）----
-    print("\n  [4.2] 消融基线模型（12 类标签）")
-    base_config = ModelConfig(freeze_visual=True, freeze_text=True, num_emotions=12)
+    # ---- 4.2 消融基线模型（核心模块全部关闭，标签空间仍为 8 类）----
+    print("\n  [4.2] 消融基线模型（8 类标签，核心模块关闭）")
+    base_config = ModelConfig(freeze_visual=True, freeze_text=True)
     base_model = MultiLabelEmotionModel(base_config)
     base_model.eval()
 
     with torch.no_grad():
         base_out = base_model(dummy_images, return_attention=True)
 
-    report.check("消融基线 logits 维度 (B,12)", base_out["logits"].shape == (B, 12),
+    report.check("消融基线 logits 维度 (B,8)", base_out["logits"].shape == (B, 8),
                  f"实际: {tuple(base_out['logits'].shape)}")
     report.check("消融基线注意力图输出", base_out.get("attention_maps") is not None,
                  f"{tuple(base_out['attention_maps'].shape)}" if base_out.get("attention_maps") is not None else "无")
     report.check("消融基线不含核心模块输出",
                  "circle_vector" not in base_out and "conflict_scores" not in base_out,
-                 "保持向后兼容")
+                 "核心模块关闭")
+    report.check("★ 消融基线与完整模型标签空间一致（对比公平性）",
+                 base_config.num_emotions == full_cfg.num_emotions == 8,
+                 f"均为 {base_config.num_emotions} 类 Mikels 基础情感")
 
     # ---- 4.3 完整模型（8 类标签 + 三大核心模块）----
     print("\n  [4.3] 完整模型（8 类基础情感 + 三大核心模块）")

@@ -1,4 +1,4 @@
-﻿"""
+"""
 CLIP 双塔融合方案 — 训练脚本
 Multi-Label Emotion Recognition Training Script (CLIP Baseline)
 
@@ -41,7 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from emotion_model.config import (
     ModelConfig, TrainingConfig,
-    UNIFIED_EMOTIONS,
+    MIKELS_BASIC_EMOTIONS,
 )
 from emotion_model.dataset import create_dataloaders
 from emotion_model.full_model import MultiLabelEmotionModel
@@ -215,12 +215,12 @@ def main():
         start_epoch = ckpt.get("epoch", 0) + 1
         print(f"  已恢复: epoch {ckpt.get('epoch', 0)}")
 
-    # 数据（标签体系跟随模型配置：完整模型为 8 类基础情感）
+    # 数据（全项目统一 8 类 Mikels 基础情感标签）
     print("\n[2/4] 加载数据...")
-    if model_config.emotion_labels is not UNIFIED_EMOTIONS:
-        print(f"  ⚠ 提示：当前使用 {model_config.num_emotions} 类标签体系"
-              f"（{model_config.emotion_labels}），")
-        print(f"     请确保数据集的标签文件包含对应标签列。")
+    print(f"  标签体系: {model_config.num_emotions} 类 "
+          f"{model_config.emotion_labels}")
+    print(f"  ⚠ 数据集标签文件需包含以上标签列（如为 12 类旧格式，"
+          f"请先用 multihot_12_to_8() 转换）")
     train_loader, val_loader, test_loader = create_dataloaders(
         data_roots=args.data_root,
         emotion_labels=model_config.emotion_labels,

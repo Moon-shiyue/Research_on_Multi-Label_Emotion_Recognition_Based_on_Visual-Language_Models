@@ -489,7 +489,7 @@ if __name__ == "__main__":
     print("标签关联建模模块测试")
     print("=" * 60)
 
-    from config import UNIFIED_EMOTIONS, EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
+    from config import MIKELS_BASIC_EMOTIONS, MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
 
     B, L, D = 4, 12, 512
     dummy_features = torch.randn(B, L, D)
@@ -497,9 +497,9 @@ if __name__ == "__main__":
     # 测试标签关系图构建
     print("\n[1] 标签关系图构建测试")
     adj = build_emotion_label_graph(
-        UNIFIED_EMOTIONS,
-        EMOTION_COOCCURRENCE,
-        EMOTION_MUTUAL_EXCLUSION,
+        MIKELS_BASIC_EMOTIONS,
+        MIKELS_COOCCURRENCE,
+        MIKELS_MUTUAL_EXCLUSION,
     )
     print(f"  邻接矩阵形状: {adj.shape}")
     print(f"  正边数量: {(adj > 0).sum().item() - L}")  # 减去自连接
@@ -515,9 +515,9 @@ if __name__ == "__main__":
     label_module = LabelAssociationModule(
         num_labels=L,
         feature_dim=D,
-        emotion_labels=UNIFIED_EMOTIONS,
-        cooccurrence=EMOTION_COOCCURRENCE,
-        mutual_exclusion=EMOTION_MUTUAL_EXCLUSION,
+        emotion_labels=MIKELS_BASIC_EMOTIONS,
+        cooccurrence=MIKELS_COOCCURRENCE,
+        mutual_exclusion=MIKELS_MUTUAL_EXCLUSION,
     )
 
     with torch.no_grad():

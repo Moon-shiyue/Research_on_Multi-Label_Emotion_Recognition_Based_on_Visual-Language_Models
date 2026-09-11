@@ -321,20 +321,20 @@ config.py  ← 全局配置（情感标签、超参数）
 
 ```python
 from emotion_model import MultiLabelEmotionModel
-from emotion_model.config import ModelConfig, UNIFIED_EMOTIONS
+from emotion_model.config import ModelConfig, MIKELS_BASIC_EMOTIONS
 
 # 创建模型
 config = ModelConfig(
     freeze_visual=True,   # 冻结 CLIP 视觉编码器
     freeze_text=True,     # 冻结 CLIP 文本编码器
-    num_emotions=12,
+    num_emotions=8,
 )
 model = MultiLabelEmotionModel(config)
 
 # 训练
 outputs = model(
     pixel_values=images,           # (B, 3, 224, 224)
-    emotion_labels=UNIFIED_EMOTIONS,
+    emotion_labels=MIKELS_BASIC_EMOTIONS,
 )
 loss = model.compute_loss(outputs["logits"], targets, loss_type="asymmetric")
 loss.backward()

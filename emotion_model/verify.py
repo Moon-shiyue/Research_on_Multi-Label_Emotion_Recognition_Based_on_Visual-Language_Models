@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from emotion_model.config import (
     ModelConfig, TrainingConfig,
-    UNIFIED_EMOTIONS, EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION,
+    MIKELS_BASIC_EMOTIONS, MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
 )
 from emotion_model.base_encoder import CLIPEncoder, VisualEncoder, TextEncoder
 from emotion_model.fusion_module import (
@@ -175,7 +175,7 @@ def verify_encoder(report: VerificationReport, quick: bool = False):
 
     # 1.3 文本编码器
     print("\n  [1.3] 文本编码器验证")
-    test_labels = UNIFIED_EMOTIONS[:6]  # Ekman 6
+    test_labels = MIKELS_BASIC_EMOTIONS[:6]  # 取前 6 类用于编码器测试
 
     try:
         with torch.no_grad():
@@ -225,7 +225,7 @@ def verify_fusion(report: VerificationReport):
     """验证层次化注意力融合模块"""
     report.section("2. 跨模态融合模块验证")
 
-    B, P, L = 2, 49, 12
+    B, P, L = 2, 49, 8   # 8 类 Mikels 基础情感
     visual_dim, text_dim, hidden_dim = 768, 512, 512
 
     visual_patches = torch.randn(B, P, visual_dim)
@@ -363,13 +363,13 @@ def verify_classification_head(report: VerificationReport):
     """验证多标记分类输出头"""
     report.section("3. 多标记分类输出头验证")
 
-    B, L, D = 4, 12, 512
+    B, L, D = 4, 8, 512
     dummy_features = torch.randn(B, L, D)
     dummy_targets = torch.zeros(B, L)
     dummy_targets[0, [0, 3]] = 1.0
     dummy_targets[1, [1, 5, 7]] = 1.0
     dummy_targets[2, [2, 4]] = 1.0
-    dummy_targets[3, [6, 9, 11]] = 1.0
+    dummy_targets[3, [6, 7]] = 1.0
 
     # 3.1 标签特定分类器
     print("\n  [3.1] 标签特定分类器")
@@ -456,16 +456,16 @@ def verify_label_association(report: VerificationReport):
     """验证标签关联建模模块"""
     report.section("4. 标签关联建模模块验证")
 
-    B, L, D = 4, 12, 512
+    B, L, D = 4, 8, 512
     dummy_features = torch.randn(B, L, D)
 
     # 4.1 标签图构建
     print("\n  [4.1] 情感标签图构建")
     try:
         adj = build_emotion_label_graph(
-            UNIFIED_EMOTIONS,
-            EMOTION_COOCCURRENCE,
-            EMOTION_MUTUAL_EXCLUSION,
+            MIKELS_BASIC_EMOTIONS,
+            MIKELS_COOCCURRENCE,
+            MIKELS_MUTUAL_EXCLUSION,
         )
         report.check("邻接矩阵形状", adj.shape == (L, L))
         report.check("自连接为 1", torch.allclose(adj.diag(), torch.ones(L)),
@@ -493,9 +493,9 @@ def verify_label_association(report: VerificationReport):
             hidden_dim=256,
             output_dim=D,
             num_layers=2,
-            emotion_labels=UNIFIED_EMOTIONS,
-            cooccurrence=EMOTION_COOCCURRENCE,
-            mutual_exclusion=EMOTION_MUTUAL_EXCLUSION,
+            emotion_labels=MIKELS_BASIC_EMOTIONS,
+            cooccurrence=MIKELS_COOCCURRENCE,
+            mutual_exclusion=MIKELS_MUTUAL_EXCLUSION,
         )
 
         gcn_out = gcn(dummy_features)
@@ -526,9 +526,9 @@ def verify_label_association(report: VerificationReport):
         lam = LabelAssociationModule(
             num_labels=L,
             feature_dim=D,
-            emotion_labels=UNIFIED_EMOTIONS,
-            cooccurrence=EMOTION_COOCCURRENCE,
-            mutual_exclusion=EMOTION_MUTUAL_EXCLUSION,
+            emotion_labels=MIKELS_BASIC_EMOTIONS,
+            cooccurrence=MIKELS_COOCCURRENCE,
+            mutual_exclusion=MIKELS_MUTUAL_EXCLUSION,
         )
 
         lam_out = lam(dummy_features, return_details=True)
@@ -568,7 +568,7 @@ def verify_end_to_end(report: VerificationReport, quick: bool = False):
     """端到端集成验证"""
     report.section("5. 端到端集成验证")
 
-    B, L = 2, 12
+    B, L = 2, 8
 
     # 5.1 模型初始化
     print("\n  [5.1] 模型初始化")
@@ -618,7 +618,7 @@ def verify_end_to_end(report: VerificationReport, quick: bool = False):
         model.train()
         dummy_targets = torch.zeros(B, L)
         dummy_targets[0, [0, 3, 6]] = 1.0
-        dummy_targets[1, [1, 5, 9]] = 1.0
+        dummy_targets[1, [1, 5, 7]] = 1.0
 
         outputs = model(dummy_images, emotion_labels=test_labels)
         loss = model.compute_loss(outputs["logits"], dummy_targets, "bce")
@@ -718,19 +718,19 @@ def verify_config_and_utils(report: VerificationReport):
 
     # 6.2 情感标签体系
     print("\n  [6.2] 情感标签体系")
-    report.check("统一标签非空", len(UNIFIED_EMOTIONS) > 0,
-                 f"共 {len(UNIFIED_EMOTIONS)} 个标签")
-    report.check("共现关系已定义", len(EMOTION_COOCCURRENCE) > 0,
-                 f"共 {len(EMOTION_COOCCURRENCE)} 对")
-    report.check("互斥关系已定义", len(EMOTION_MUTUAL_EXCLUSION) > 0,
-                 f"共 {len(EMOTION_MUTUAL_EXCLUSION)} 对")
+    report.check("基础情感标签非空", len(MIKELS_BASIC_EMOTIONS) > 0,
+                 f"共 {len(MIKELS_BASIC_EMOTIONS)} 类基础情感")
+    report.check("共现关系已定义", len(MIKELS_COOCCURRENCE) > 0,
+                 f"共 {len(MIKELS_COOCCURRENCE)} 对")
+    report.check("互斥关系已定义", len(MIKELS_MUTUAL_EXCLUSION) > 0,
+                 f"共 {len(MIKELS_MUTUAL_EXCLUSION)} 对")
 
     # 6.3 工具函数
     print("\n  [6.3] 评估指标验证")
     try:
         from emotion_model.utils import compute_metrics
 
-        N, L = 50, 12
+        N, L = 50, 8
         targets = torch.randint(0, 2, (N, L)).float()
         probs = torch.sigmoid(torch.randn(N, L) + targets * 2)
         preds = (probs > 0.5).float()
