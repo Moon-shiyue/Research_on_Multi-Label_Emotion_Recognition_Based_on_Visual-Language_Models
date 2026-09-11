@@ -78,6 +78,12 @@ def parse_args():
                         help="恢复训练的 checkpoint 路径")
     parser.add_argument("--eval_only", action="store_true",
                         help="仅评估不训练")
+    parser.add_argument("--innovation", action="store_true",
+                        help="启用申请书三大核心创新模块（冲突感知融合 + 情感环形分类头 + VL-Adapter）")
+    parser.add_argument("--ablation", type=str, default=None,
+                        choices=["baseline", "full", "w/o_conflict_fusion",
+                                 "w/o_circular_head", "w/o_vl_adapter", "w/o_contrastive"],
+                        help="消融实验配置名（优先级高于 --innovation）")
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -87,6 +93,8 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, loss_type,
     model.train()
     loss_meter = AverageMeter()
 
+    use_circular = getattr(model, "use_circular_head", False)
+
     pbar = tqdm(train_loader, desc=f"Epoch {epoch}")
     for step, batch in enumerate(pbar):
         # 移动数据到设备
@@ -95,7 +103,12 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, loss_type,
 
         # 前向传播
         outputs = model(pixel_values, emotion_labels=model.emotion_labels)
-        loss = model.compute_loss(outputs["logits"], targets, loss_type)
+        # 多目标联合损失：分类 + 环形（模块②）+ 冲突对比（模块①）
+        loss = model.compute_loss(
+            outputs["logits"], targets, loss_type,
+            circular_outputs=outputs if use_circular else None,
+            contrastive_loss=outputs.get("contrastive_loss"),
+        )
 
         # 混合精度反向传播
         loss.backward()
@@ -152,12 +165,21 @@ def main():
     # 创建输出目录
     os.makedirs(args.output, exist_ok=True)
 
-    # 配置
-    model_config = ModelConfig(
-        freeze_visual=args.freeze_visual,
-        freeze_text=args.freeze_text,
-        use_label_association=not args.no_label_association,
-    )
+    # 配置（支持基础版 / 创新版 / 消融实验配置）
+    if args.ablation:
+        from emotion_model.config import create_ablation_configs
+        model_config = create_ablation_configs()[args.ablation]
+        print(f"  使用消融配置: {args.ablation}")
+    elif args.innovation:
+        from emotion_model.config import create_innovation_config
+        model_config = create_innovation_config()
+        print(f"  使用创新版配置（三大核心模块）")
+    else:
+        model_config = ModelConfig(
+            freeze_visual=args.freeze_visual,
+            freeze_text=args.freeze_text,
+            use_label_association=not args.no_label_association,
+        )
     train_config = TrainingConfig(
         num_epochs=args.epochs,
         batch_size=args.batch_size,
@@ -171,10 +193,12 @@ def main():
     print("=" * 60)
     print(f"  设备: {device}")
     print(f"  数据: {args.data_root}")
+    print(f"  标签体系: {model_config.num_emotions} 类 {model_config.emotion_labels}")
     print(f"  损失: {args.loss_type}")
-    print(f"  分类头: {args.classifier_type}")
-    print(f"  冻结视觉/文本: {args.freeze_visual}/{args.freeze_text}")
-    print(f"  标签关联: {'启用' if model_config.use_label_association else '禁用（消融）'}")
+    print(f"  冻结视觉/文本: {model_config.freeze_visual}/{model_config.freeze_text}")
+    print(f"  模块① 冲突感知融合: {'启用' if getattr(model_config, 'use_conflict_fusion', False) else '禁用'}")
+    print(f"  模块② 情感环形分类头: {'启用' if getattr(model_config, 'use_circular_head', False) else '禁用'}")
+    print(f"  模块③ VL-Adapter: {'启用' if getattr(model_config, 'use_vl_adapter', False) else '禁用'}")
     print(f"  输出: {args.output}")
 
     # 加载模型
@@ -191,11 +215,15 @@ def main():
         start_epoch = ckpt.get("epoch", 0) + 1
         print(f"  已恢复: epoch {ckpt.get('epoch', 0)}")
 
-    # 数据
+    # 数据（标签体系跟随模型配置：创新版为 8 类基础情感）
     print("\n[2/4] 加载数据...")
+    if model_config.emotion_labels is not UNIFIED_EMOTIONS:
+        print(f"  ⚠ 提示：当前使用 {model_config.num_emotions} 类标签体系"
+              f"（{model_config.emotion_labels}），")
+        print(f"     请确保数据集的标签文件包含对应标签列。")
     train_loader, val_loader, test_loader = create_dataloaders(
         data_roots=args.data_root,
-        emotion_labels=UNIFIED_EMOTIONS,
+        emotion_labels=model_config.emotion_labels,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         val_split=args.val_split,

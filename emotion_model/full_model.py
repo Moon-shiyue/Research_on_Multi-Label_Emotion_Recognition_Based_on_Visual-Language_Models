@@ -68,6 +68,13 @@ try:
     from .classification_head import MultiLabelClassificationHead
     from .label_association import LabelAssociationModule
     from .config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
+    # 申请书三大核心创新模块
+    from .conflict_fusion import ConflictAwareFusionModule
+    from .circular_head import (
+        CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
+        build_label_correlation_matrix,
+    )
+    from .vl_adapter import VLAdapterManager
 except ImportError:  # 直接运行脚本时相对导入不可用
     import sys
     import os
@@ -77,6 +84,12 @@ except ImportError:  # 直接运行脚本时相对导入不可用
     from classification_head import MultiLabelClassificationHead
     from label_association import LabelAssociationModule
     from config import EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
+    from conflict_fusion import ConflictAwareFusionModule
+    from circular_head import (
+        CircularMultiLabelHead, EmotionCircleMapper, ProgressiveCircularLoss,
+        build_label_correlation_matrix,
+    )
+    from vl_adapter import VLAdapterManager
 
 
 class MultiLabelEmotionModel(nn.Module):
@@ -126,23 +139,77 @@ class MultiLabelEmotionModel(nn.Module):
             use_grad_checkpoint=model_config.use_grad_checkpoint,
         )
 
-        # ---- 2. 层次化注意力融合模块 ----
         visual_dim = self.encoder.visual_encoder.hidden_size  # 768 (ViT-B/32)
         text_dim = model_config.text_feature_dim  # 512
         fusion_dim = model_config.fusion_hidden_dim  # 512
 
-        self.fusion_module = HierarchicalAttentionFusion(
-            visual_dim=visual_dim,
-            text_dim=text_dim,
-            hidden_dim=fusion_dim,
-            num_heads=model_config.fusion_num_heads,
-            dropout=model_config.fusion_dropout,
-            num_layers=model_config.fusion_num_layers,
-            fusion_output_dim=fusion_dim,
-        )
+        # ---- 1.5 模块③：VL-Adapter 跨场景泛化（可选）----
+        self.use_vl_adapter = getattr(model_config, "use_vl_adapter", False)
+        if self.use_vl_adapter:
+            self.vl_adapter = VLAdapterManager(
+                visual_dim=visual_dim,
+                text_dim=text_dim,
+                num_layers=12,  # ViT-B/32 与 CLIP Text 均为 12 层
+                bottleneck_ratio=getattr(model_config, "adapter_bottleneck_ratio", 4),
+                num_domains=getattr(model_config, "adapter_num_domains", 4),
+                domain_rank=getattr(model_config, "adapter_domain_rank", 4),
+                dropout=model_config.fusion_dropout,
+            )
+            # 挂载到 CLIP 双塔各层（通过 forward hook）
+            try:
+                self.vl_adapter.attach(
+                    vision_model=self.encoder.visual_encoder.vision_model,
+                    text_model=self.encoder.text_encoder.text_model,
+                )
+                # 冻结主干：仅适配器、层归一化与视觉投影层可训练
+                self.vl_adapter.freeze_backbone(
+                    self.encoder.visual_encoder.vision_model,
+                    self.encoder.text_encoder.text_model,
+                )
+                self.vl_adapter.set_domain(getattr(model_config, "adapter_domain", 0))
+                self._adapter_attached = True
+            except Exception as e:
+                warnings.warn(f"VL-Adapter 挂载失败，将仅使用特征级适配: {e}")
+                self._adapter_attached = False
+        else:
+            self.vl_adapter = None
+            self._adapter_attached = False
 
-        # ---- 3. 标签关联建模模块 ----
-        if model_config.use_label_association:
+        # ---- 2. 融合模块：模块① 冲突感知融合 或 基础版层次化融合 ----
+        self.use_conflict_fusion = getattr(model_config, "use_conflict_fusion", False)
+        if self.use_conflict_fusion:
+            self.fusion_module = ConflictAwareFusionModule(
+                visual_dim=visual_dim,
+                text_dim=text_dim,
+                hidden_dim=fusion_dim,
+                num_heads=model_config.fusion_num_heads,
+                dropout=model_config.fusion_dropout,
+                fusion_output_dim=fusion_dim,
+                text_boundary_init=getattr(model_config, "conflict_text_boundary_init", 0.3),
+                visual_boundary_init=getattr(model_config, "conflict_visual_boundary_init", 0.0),
+                use_contrastive_loss=getattr(model_config, "use_conflict_contrastive", True),
+            )
+        else:
+            self.fusion_module = HierarchicalAttentionFusion(
+                visual_dim=visual_dim,
+                text_dim=text_dim,
+                hidden_dim=fusion_dim,
+                num_heads=model_config.fusion_num_heads,
+                dropout=model_config.fusion_dropout,
+                num_layers=model_config.fusion_num_layers,
+                fusion_output_dim=fusion_dim,
+            )
+
+        # ---- 3. 标签关联建模（环形分类头自带标签关联，避免重复）----
+        self.use_circular_head = getattr(model_config, "use_circular_head", False)
+        use_la = model_config.use_label_association and not self.use_circular_head
+        if use_la:
+            # 根据标签体系选择先验关系表
+            if getattr(model_config, "use_mikels_basic", False):
+                from .config import MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
+                cooc, mutex = MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
+            else:
+                cooc, mutex = EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION
             self.label_association = LabelAssociationModule(
                 num_labels=model_config.num_emotions,
                 feature_dim=fusion_dim,
@@ -152,22 +219,55 @@ class MultiLabelEmotionModel(nn.Module):
                 gcn_num_layers=model_config.gcn_num_layers,
                 dropout=model_config.gcn_dropout,
                 emotion_labels=model_config.emotion_labels,
-                cooccurrence=EMOTION_COOCCURRENCE,
-                mutual_exclusion=EMOTION_MUTUAL_EXCLUSION,
+                cooccurrence=cooc,
+                mutual_exclusion=mutex,
             )
         else:
             self.label_association = None
 
-        # ---- 4. 多标记分类输出头 ----
-        self.classification_head = MultiLabelClassificationHead(
-            input_dim=fusion_dim,
-            num_labels=model_config.num_emotions,
-            emotion_labels=model_config.emotion_labels,
-            hidden_dims=model_config.classifier_hidden_dims,
-            classifier_type="shared_attention",
-            dropout=model_config.fusion_dropout,
-            label_smoothing=model_config.label_smoothing,
-        )
+        # ---- 4. 分类输出头：模块② 情感环形表示 或 基础版多标记头 ----
+        if self.use_circular_head:
+            # 环形表示要求标签为 8 类 Mikels 基础情感
+            if getattr(model_config, "use_mikels_basic", False):
+                from .config import MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION
+                corr_matrix = build_label_correlation_matrix(
+                    model_config.emotion_labels,
+                    MIKELS_COOCCURRENCE, MIKELS_MUTUAL_EXCLUSION,
+                )
+            else:
+                corr_matrix = build_label_correlation_matrix(
+                    model_config.emotion_labels,
+                    EMOTION_COOCCURRENCE, EMOTION_MUTUAL_EXCLUSION,
+                )
+
+            self.classification_head = CircularMultiLabelHead(
+                input_dim=fusion_dim,
+                num_labels=model_config.num_emotions,
+                emotion_labels=model_config.emotion_labels,
+                hidden_dim=model_config.classifier_hidden_dims[0],
+                dropout=model_config.fusion_dropout,
+                radius=getattr(model_config, "circular_radius", 1.0),
+                label_correlation_matrix=corr_matrix,
+            )
+            # 环形损失（含与 KL 的联合权重）
+            self.circular_loss = ProgressiveCircularLoss(
+                mu=getattr(model_config, "circular_mu", 0.5),
+                angle_mode=getattr(model_config, "circular_angle_mode", "circular"),
+            )
+            # 情感环形映射器（构造监督信号用）
+            self.circle_mapper = EmotionCircleMapper(num_labels=model_config.num_emotions)
+        else:
+            self.classification_head = MultiLabelClassificationHead(
+                input_dim=fusion_dim,
+                num_labels=model_config.num_emotions,
+                emotion_labels=model_config.emotion_labels,
+                hidden_dims=model_config.classifier_hidden_dims,
+                classifier_type="shared_attention",
+                dropout=model_config.fusion_dropout,
+                label_smoothing=model_config.label_smoothing,
+            )
+            self.circular_loss = None
+            self.circle_mapper = None
 
         self.num_emotions = model_config.num_emotions
         self.emotion_labels = model_config.emotion_labels
@@ -186,6 +286,11 @@ class MultiLabelEmotionModel(nn.Module):
         print(f"  总参数量: {total_params:,}")
         print(f"  可训练参数: {trainable_params:,}")
         print(f"  冻结参数: {total_params - trainable_params:,}")
+        print(f"  ---- 创新模块 ----")
+        print(f"  模块① 冲突感知融合: {'启用' if self.use_conflict_fusion else '禁用（基础版融合）'}")
+        print(f"  模块② 情感环形分类头: {'启用' if self.use_circular_head else '禁用（基础版多标记头）'}")
+        print(f"  模块③ VL-Adapter: {'启用' if self.use_vl_adapter else '禁用'}"
+              f"{'（已挂载 CLIP）' if self._adapter_attached else ''}")
         print(f"  标签关联模块: {'启用' if self.label_association else '禁用'}")
         print(f"{'='*60}\n")
 
@@ -213,21 +318,24 @@ class MultiLabelEmotionModel(nn.Module):
         emotion_labels: List[str] = None,
         return_attention: bool = False,
         return_intermediate: bool = False,
+        texts: List[str] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         完整前向传播
 
         Args:
             pixel_values: (B, 3, H, W) 预处理后的图像
-            emotion_labels: 情感标签列表（默认使用配置中的统一标签集）
+            emotion_labels: 情感标签列表（默认使用配置中的标签集）
             return_attention: 是否返回注意力权重（用于可解释性分析）
             return_intermediate: 是否返回所有中间特征
+            texts: 可选的原始文本输入（图文对数据集，用于冲突感知融合的双路径建模）
 
         Returns:
             dict:
                 - logits: (B, num_labels) 原始 logits
                 - probabilities: (B, num_labels) [0,1] 置信度
                 - predictions: (B, num_labels) 0/1 预测
+                - circle_vector: (B, L, 3) 情感环形三维表示（模块②启用时）
                 - attention_maps: (B, H, L, P) 可选，视觉注意力图
                 - intermediate: dict 可选，所有中间表示
         """
@@ -238,7 +346,7 @@ class MultiLabelEmotionModel(nn.Module):
         B = pixel_values.shape[0]
 
         # ============================================
-        # 1. CLIP 双塔编码
+        # 1. CLIP 双塔编码（VL-Adapter 通过 hook 自动介入）
         # ============================================
         encoder_output = self.encoder.encode_image(
             pixel_values, return_patches=True
@@ -250,33 +358,79 @@ class MultiLabelEmotionModel(nn.Module):
         text_features = text_output["global_feature"].unsqueeze(0).expand(B, -1, -1)
         # (B, num_labels, 512)
 
+        # 若提供原始文本（图文对数据），编码为 token 级特征供双路径冲突注意力使用
+        text_token_features = None
+        if texts is not None:
+            token_out = self.encoder.encode_text_from_raw(
+                list(texts), device=device
+            )
+            text_token_features = token_out.get("token_features", None)
+            if text_token_features is not None and text_token_features.shape[0] != B:
+                text_token_features = None
+
         # ============================================
-        # 2. 层次化注意力融合
+        # 2. 跨模态融合（模块① 冲突感知 或 基础版层次化）
         # ============================================
-        fusion_output = self.fusion_module(
-            visual_patches=patch_features,
-            visual_global=visual_global,
-            text_features=text_features,
-        )
+        if self.use_conflict_fusion:
+            fusion_output = self.fusion_module(
+                visual_patches=patch_features,
+                visual_global=visual_global,
+                text_features=text_features,
+                text_token_features=text_token_features,
+            )
+        else:
+            fusion_output = self.fusion_module(
+                visual_patches=patch_features,
+                visual_global=visual_global,
+                text_features=text_features,
+            )
         fused_features = fusion_output["fused_features"]  # (B, num_labels, 512)
 
         # ============================================
         # 3. 标签关联建模（可选）
         # ============================================
+        label_output = None
         if self.label_association is not None:
-            label_output = self.label_association(fused_features, return_details=return_intermediate)
+            label_output = self.label_association(
+                fused_features, return_details=return_intermediate
+            )
             fused_features = label_output["enhanced_features"]  # (B, num_labels, 512)
 
         # ============================================
-        # 4. 多标记分类
+        # 4. 多标记分类（模块② 情感环形表示 或 基础版）
         # ============================================
-        cls_output = self.classification_head(fused_features, return_probs=True)
+        if self.use_circular_head:
+            cls_output = self.classification_head(fused_features, return_circle=True)
+        else:
+            cls_output = self.classification_head(fused_features, return_probs=True)
 
         result = {
             "logits": cls_output["logits"],
             "probabilities": cls_output["probabilities"],
-            "predictions": cls_output["predictions"],
+            "predictions": (
+                (cls_output["probabilities"] > 0.5).float()
+                if "predictions" not in cls_output
+                else cls_output["predictions"]
+            ),
         }
+
+        # 环形表示附加输出（模块②）
+        if self.use_circular_head:
+            result["circle_vector"] = cls_output["circle_vector"]
+            result["polarity_probs"] = cls_output["polarity_probs"]
+            result["polarity_value"] = cls_output["polarity_value"]
+            result["angle"] = cls_output["angle"]
+            result["intensity"] = cls_output["intensity"]
+
+        # 冲突感知附加输出（模块①）
+        if self.use_conflict_fusion:
+            result["conflict_scores"] = fusion_output.get("conflict_scores")
+            result["cross_conflict"] = fusion_output.get("cross_conflict")
+            result["alignment_weights"] = fusion_output.get("alignment_weights")
+            if "contrastive_loss" in fusion_output:
+                result["contrastive_loss"] = fusion_output["contrastive_loss"]
+            result["text_features_conflict"] = fusion_output.get("text_features")
+            result["visual_features_conflict"] = fusion_output.get("visual_features")
 
         if return_attention:
             result["attention_maps"] = fusion_output.get("attention_maps", None)
@@ -286,8 +440,9 @@ class MultiLabelEmotionModel(nn.Module):
                 "encoder_output": encoder_output,
                 "text_features": text_features,
                 "fusion_output": fusion_output,
+                "cls_output": cls_output,
             }
-            if self.label_association is not None:
+            if label_output is not None:
                 result["intermediate"]["label_output"] = label_output
 
         return result
@@ -297,23 +452,96 @@ class MultiLabelEmotionModel(nn.Module):
         logits: torch.Tensor,
         targets: torch.Tensor,
         loss_type: str = "bce",
+        circular_outputs: Dict[str, torch.Tensor] = None,
+        contrastive_loss: torch.Tensor = None,
+        loss_weights: Dict[str, float] = None,
     ) -> torch.Tensor:
         """
-        计算损失
+        计算损失（多目标联合损失）
+
+        基础版: L = 分类损失（BCE / 非对称 / Focal）
+        完整版: L = λ1·L_cls + λ2·L_PC + λ3·L_contrastive
+          - L_cls: 分类损失（非对称损失，解决标签不平衡）
+          - L_PC:  渐进式环形损失（模块②，刻画情感的极性-类型-强度）
+          - L_contrastive: 冲突对比损失（模块①，抑制模态内语义干扰）
 
         Args:
             logits: (B, num_labels) 预测 logits
             targets: (B, num_labels) 真实多热标签向量
             loss_type: "bce" | "asymmetric" | "focal"
+            circular_outputs: 分类头输出（模块②启用时传入，用于环形损失）
+            contrastive_loss: 冲突对比损失（模块①启用时传入）
+            loss_weights: 各损失项权重 {"cls": 1.0, "circular": 0.5, "contrastive": 0.3}
 
         Returns:
             loss: 标量损失
         """
-        return self.classification_head.compute_loss(
-            logits=logits,
-            targets=targets,
-            loss_type=loss_type,
-        )
+        weights = {"cls": 1.0, "circular": 0.5, "contrastive": 0.3}
+        if loss_weights:
+            weights.update(loss_weights)
+
+        # ---- 分类损失（主损失）----
+        if self.use_circular_head:
+            # 环形分类头输出 logits，用相同的多标记损失
+            cls_loss = self._multilabel_loss(logits, targets, loss_type)
+        else:
+            cls_loss = self.classification_head.compute_loss(
+                logits=logits, targets=targets, loss_type=loss_type,
+            )
+
+        total = weights["cls"] * cls_loss
+
+        # ---- 渐进式环形损失（模块②）----
+        if self.use_circular_head and circular_outputs is not None and self.circular_loss is not None:
+            # 由多热标签构造环形监督信号 (p, θ, r)
+            with torch.no_grad():
+                target_vec = self.circle_mapper.distribution_to_vector(targets.float())
+                B, L = targets.shape
+                target_polarity = target_vec["polarity"].unsqueeze(-1).expand(B, L)
+                target_angle = target_vec["angle"].unsqueeze(-1).expand(B, L)
+                target_intensity = target_vec["intensity"].unsqueeze(-1).expand(B, L)
+
+            pc = self.circular_loss(circular_outputs, {
+                "polarity": target_polarity,
+                "angle": target_angle,
+                "intensity": target_intensity,
+            })
+            total = total + weights["circular"] * pc["pc_loss"]
+
+        # ---- 冲突对比损失（模块①）----
+        if contrastive_loss is not None:
+            total = total + weights["contrastive"] * contrastive_loss
+
+        return total
+
+    def _multilabel_loss(
+        self,
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+        loss_type: str = "bce",
+    ) -> torch.Tensor:
+        """多标记分类损失（供环形分类头使用，与基础版公式一致）"""
+        import torch.nn.functional as F
+
+        if loss_type == "bce":
+            return F.binary_cross_entropy_with_logits(logits, targets, reduction="mean")
+
+        probs = torch.sigmoid(logits)
+
+        if loss_type == "asymmetric":
+            gamma_pos, gamma_neg, clip = 1.0, 4.0, 0.05
+            pos_loss = -((1 - probs) ** gamma_pos) * torch.log(probs + 1e-8) * targets
+            probs_neg = probs.clamp(max=1 - clip)
+            neg_loss = -((probs_neg) ** gamma_neg) * torch.log(1 - probs_neg + 1e-8) * (1 - targets)
+            return (pos_loss + neg_loss).mean()
+
+        if loss_type == "focal":
+            gamma, alpha = 2.0, 0.25
+            pt = probs * targets + (1 - probs) * (1 - targets)
+            alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+            return (-alpha_t * ((1 - pt) ** gamma) * torch.log(pt + 1e-8)).mean()
+
+        raise ValueError(f"未知的损失类型: {loss_type}")
 
     @torch.no_grad()
     def predict(

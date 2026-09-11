@@ -1,10 +1,17 @@
 """
 全局配置文件
 定义模型超参数、情感标签体系、训练参数等
+
+标签体系包含两级：
+  1. 12 类统一情感标签（UNIFIED_EMOTIONS）— 基础版，兼容多数据集
+  2. 8 类 Mikels 基础情感（MIKELS_BASIC_EMOTIONS）— 申请书要求，
+     对应 CVPR 2021 情感环形表示（Emotion Circle）
 """
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+import torch
 
 # ============================================================
 # 情感标签体系
@@ -29,6 +36,137 @@ UNIFIED_EMOTIONS = [
     "joy", "sadness", "anger", "fear", "surprise", "disgust",
     "love", "peace", "amusement", "awe", "contentment", "excitement"
 ]
+
+# ============================================================
+# Mikels Wheel 8 类基础情感体系（申请书要求）
+# 对应 CVPR 2021 情感环形表示（Emotion Circle），角度 = (2j-1)/8·π
+# ============================================================
+
+# 8 类基础情感（沿环形逆时针排列）
+MIKELS_BASIC_EMOTIONS = [
+    "amusement",    # j=1 → 22.5°  积极
+    "excitement",   # j=2 → 67.5°  积极
+    "anger",        # j=3 → 112.5° 消极
+    "disgust",      # j=4 → 157.5° 消极
+    "fear",         # j=5 → 202.5° 消极
+    "sadness",      # j=6 → 247.5° 消极
+    "awe",          # j=7 → 292.5° 积极
+    "contentment",  # j=8 → 337.5° 积极
+]
+
+# 基础情感的极性分组（Mikels et al. 2005）
+MIKELS_POSITIVE = ["amusement", "excitement", "awe", "contentment"]
+MIKELS_NEGATIVE = ["anger", "disgust", "fear", "sadness"]
+
+# 复合情感映射规则（环形相邻基础情感的组合，构成两级标签体系）
+COMPOUND_EMOTION_RULES = {
+    ("amusement", "excitement"): "joy",           # 有趣+兴奋 → 喜悦
+    ("amusement", "contentment"): "satisfaction", # 有趣+满足 → 满意
+    ("awe", "contentment"): "serenity",           # 敬畏+满足 → 宁静
+    ("sadness", "awe"): "melancholy",             # 悲伤+敬畏 → 忧郁
+    ("fear", "sadness"): "despair",               # 恐惧+悲伤 → 绝望
+    ("disgust", "fear"): "aversion",              # 厌恶+恐惧 → 反感
+    ("anger", "disgust"): "contempt",             # 愤怒+厌恶 → 轻蔑
+    ("excitement", "anger"): "agitation",         # 兴奋+愤怒 → 激越（跨极性高唤醒）
+}
+
+# 可派生出的复合情感列表
+COMPOUND_EMOTIONS = sorted(set(COMPOUND_EMOTION_RULES.values()))
+
+# 8 类基础情感的共现关系（环形相邻情感共现概率更高）
+MIKELS_COOCCURRENCE = {
+    ("amusement", "excitement"): 0.7,
+    ("amusement", "contentment"): 0.6,
+    ("awe", "contentment"): 0.5,
+    ("sadness", "awe"): 0.3,
+    ("fear", "sadness"): 0.6,
+    ("disgust", "fear"): 0.5,
+    ("anger", "disgust"): 0.6,
+    ("excitement", "anger"): 0.2,
+    ("fear", "anger"): 0.4,
+    ("sadness", "disgust"): 0.4,
+}
+
+# 8 类基础情感的互斥关系（跨极性情感互斥）
+MIKELS_MUTUAL_EXCLUSION = {
+    ("amusement", "anger"): 0.8,
+    ("amusement", "disgust"): 0.8,
+    ("amusement", "fear"): 0.7,
+    ("amusement", "sadness"): 0.7,
+    ("excitement", "sadness"): 0.6,
+    ("contentment", "anger"): 0.8,
+    ("contentment", "fear"): 0.7,
+    ("awe", "anger"): 0.5,
+    ("awe", "disgust"): 0.5,
+}
+
+
+def map_to_compound_emotion(positive_emotions: List[str]) -> List[str]:
+    """
+    基础情感组合 → 复合情感映射（两级标签体系的第二级）
+
+    Args:
+        positive_emotions: 被激活的基础情感列表
+
+    Returns:
+        派生出的复合情感列表
+
+    示例:
+        >>> map_to_compound_emotion(["amusement", "excitement"])
+        ['joy']
+    """
+    positive_set = set(positive_emotions)
+    compounds = []
+    for (e1, e2), compound in COMPOUND_EMOTION_RULES.items():
+        if e1 in positive_set and e2 in positive_set and compound not in compounds:
+            compounds.append(compound)
+    return compounds
+
+
+def map_legacy_to_basic(legacy_label: str) -> List[str]:
+    """
+    旧 12 类标签 → 8 类基础情感映射（用于数据集标签体系转换）
+
+    映射依据（语义/极性/唤醒度最接近）:
+        joy      → amusement, excitement
+        surprise → excitement, awe
+        love     → contentment, amusement
+        peace    → contentment, awe
+        其余标签本身即为 Mikels 基础情感
+    """
+    mapping = {
+        "joy": ["amusement", "excitement"],
+        "surprise": ["excitement", "awe"],
+        "love": ["contentment", "amusement"],
+        "peace": ["contentment", "awe"],
+    }
+    if legacy_label in MIKELS_BASIC_EMOTIONS:
+        return [legacy_label]
+    return mapping.get(legacy_label, [])
+
+
+def multihot_12_to_8(multihot: torch.Tensor) -> torch.Tensor:
+    """
+    12 类多热标签 → 8 类基础情感多热标签
+
+    Args:
+        multihot: (N, 12) 旧标签体系多热编码
+
+    Returns:
+        (N, 8) Mikels 基础情感多热编码
+    """
+    N = multihot.shape[0]
+    out = torch.zeros(N, len(MIKELS_BASIC_EMOTIONS))
+    idx = {name: i for i, name in enumerate(MIKELS_BASIC_EMOTIONS)}
+
+    for j, legacy in enumerate(UNIFIED_EMOTIONS):
+        if multihot[:, j].sum() == 0:
+            continue
+        for basic in map_legacy_to_basic(legacy):
+            if basic in idx:
+                # 取最大值，避免一条标签映射到多个基础情感时重复累加
+                out[:, idx[basic]] = torch.maximum(out[:, idx[basic]], multihot[:, j])
+    return out
 
 # 情感标签共现关系（先验知识）
 # 值域: [0, 1]，表示两个情感同时出现的先验概率/关联强度
@@ -95,6 +233,102 @@ class ModelConfig:
     use_asymmetric_loss: bool = True   # 使用非对称损失处理标签不平衡
     pos_weight: Optional[float] = None # 正样本权重
     label_smoothing: float = 0.0       # 标签平滑
+
+    # ========================================================
+    # 申请书「研究内容」三大核心创新模块开关
+    # 全部为 False 时 = 基础版（消融实验的对照组）
+    # ========================================================
+
+    # ---- 模块① 注意力引导的冲突感知跨模态融合 ----
+    use_conflict_fusion: bool = False      # 替换基础版层次化融合
+    conflict_text_boundary_init: float = 0.3   # 文本冲突动态边界初值
+    conflict_visual_boundary_init: float = 0.0 # 视觉冲突动态边界初值
+    use_conflict_contrastive: bool = True      # 是否启用模态内对比学习损失
+
+    # ---- 模块② 情感环形表示多标记分类头 ----
+    use_circular_head: bool = False        # 替换基础版分类头
+    circular_radius: float = 1.0           # 环形半径 r
+    circular_mu: float = 0.5               # PC 损失与 KL 损失的权重（论文 Eq.10）
+    circular_angle_mode: str = "circular"  # 角度误差模式: circular | raw
+    use_compound_emotion: bool = True      # 是否输出复合情感（两级标签体系）
+
+    # ---- 模块③ VL-Adapter 跨场景泛化 ----
+    use_vl_adapter: bool = False           # 启用参数解耦型适配器
+    adapter_bottleneck_ratio: int = 4      # 瓶颈压缩比（4 → 约 4.6% 可训练参数）
+    adapter_num_domains: int = 4           # 场景（域）数量
+    adapter_domain_rank: int = 4           # 域特定低秩分支秩
+    adapter_domain: int = 0                # 当前场景编号
+
+    # ---- 标签体系 ----
+    use_mikels_basic: bool = False         # 使用 8 类 Mikels 基础情感（环形表示要求）
+
+
+def create_innovation_config(**overrides) -> "ModelConfig":
+    """
+    创建启用三大核心创新模块的完整配置（申请书「研究内容」完整方案）
+
+    对应论文实验矩阵中的「完整方案」（A-2），用于与基础版对照。
+
+    启用内容:
+      - 模块① 冲突感知跨模态融合（含模态内对比学习与三元组排序损失）
+      - 模块② 情感环形表示分类头（8 类 Mikels 基础情感 + 渐进式环形损失）
+      - 模块③ VL-Adapter 跨场景泛化（参数解耦适配器）
+      - 冻结 CLIP 编码器（配合 VL-Adapter 的参数高效微调策略）
+
+    使用方式:
+        config = create_innovation_config(freeze_visual=True, freeze_text=True)
+        model = MultiLabelEmotionModel(config)
+    """
+    defaults = dict(
+        # 三大创新模块
+        use_conflict_fusion=True,
+        use_circular_head=True,
+        use_vl_adapter=True,
+        # 标签体系切换为 8 类 Mikels 基础情感（环形表示的前提）
+        use_mikels_basic=True,
+        num_emotions=len(MIKELS_BASIC_EMOTIONS),
+        emotion_labels=MIKELS_BASIC_EMOTIONS,
+        # 模块③ 要求冻结主干
+        freeze_visual=True,
+        freeze_text=True,
+        # 环形表示替代基础版标签关联（环形本身已建模标签关系）
+        use_label_association=False,
+    )
+    defaults.update(overrides)
+    return ModelConfig(**defaults)
+
+
+def create_ablation_configs() -> dict:
+    """
+    生成消融实验配置集合（对应申请书的消融实验设计）
+
+    Returns:
+        dict: {实验名: ModelConfig}
+
+    实验组:
+        - baseline:  基础版（层次化融合 + 普通多标记头）
+        - full:      完整方案（三大模块全开）
+        - w/o_conflict_fusion:  移除模块①
+        - w/o_circular_head:    移除模块②（换回普通多标记头）
+        - w/o_vl_adapter:       移除模块③
+        - w/o_contrastive:      仅移除模块①中的对比学习损失
+    """
+    return {
+        "baseline": ModelConfig(
+            use_conflict_fusion=False,
+            use_circular_head=False,
+            use_vl_adapter=False,
+            use_mikels_basic=False,
+        ),
+        "full": create_innovation_config(),
+        "w/o_conflict_fusion": create_innovation_config(use_conflict_fusion=False),
+        "w/o_circular_head": create_innovation_config(
+            use_circular_head=False, use_mikels_basic=False,
+            num_emotions=len(UNIFIED_EMOTIONS), emotion_labels=UNIFIED_EMOTIONS,
+        ),
+        "w/o_vl_adapter": create_innovation_config(use_vl_adapter=False),
+        "w/o_contrastive": create_innovation_config(use_conflict_contrastive=False),
+    }
 
 
 @dataclass
