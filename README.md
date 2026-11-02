@@ -22,7 +22,7 @@ Research on Multi-Label Emotion Recognition Based on Visual-Language Models
 |------|-----------|---------|------|
 | **① 冲突感知跨模态融合** | 图文语义冲突（反讽）、模态内语义干扰 | 双路径冲突注意力 + 模态内对比学习 + 双向三元组排序损失 + 冲突感知对齐 | `conflict_fusion.py` |
 | **② 情感环形表示分类头** | 复合情感共存、强度差异建模 | Mikels Wheel 环形表示（极性-类型-强度三维）+ **双头设计**（多标记头 + 复合情感环形头 + 一致性约束） | `circular_head.py` |
-| **③ VL-Adapter 跨场景泛化** | 跨场景特征漂移、灾难性遗忘 | 参数解耦适配器（共享参数 + 域特定参数），可训练参数仅 4.57% | `vl_adapter.py` |
+| **③ VL-Adapter 跨场景泛化** | 跨场景特征漂移、灾难性遗忘 | 参数解耦适配器（共享参数 + 域特定参数），适配器 6,017,280 参数 = CLIP 主干 3.99% | `vl_adapter.py` |
 
 **验证状态**：`verify_modules.py` — **115/115 项测试全部通过**
 

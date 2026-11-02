@@ -429,9 +429,16 @@ class HierarchicalAttentionFusion(nn.Module):
         dropout: float = 0.1,
         num_layers: int = 2,
         fusion_output_dim: int = 512,
+        visual_global_dim: int = None,
     ):
         super().__init__()
         self.hidden_dim = hidden_dim
+
+        # visual_global 是编码器输出的全局特征（projection 后维度），
+        # 与 patch 特征维度 visual_dim 不是一回事。缺省取 text_dim（CLIP 公共空间 512）。
+        if visual_global_dim is None:
+            visual_global_dim = text_dim
+        self.visual_global_dim = visual_global_dim
 
         # ---- Step 1: 局部高权重特征融合 ----
 
@@ -445,9 +452,11 @@ class HierarchicalAttentionFusion(nn.Module):
         )
 
         # 1b. 文本情绪注意力：视觉→文本，筛选图像相关情感语义
+        # 注意：这里吃的是 visual_global（投影后的全局特征），不是 patch 特征，
+        # 所以必须用 visual_global_dim 而不是 visual_dim/hidden_dim。
         self.text_emotion_attn = TextEmotionAttention(
             text_dim=text_dim,
-            visual_dim=visual_dim if visual_dim == text_dim else hidden_dim,
+            visual_dim=visual_global_dim,
             hidden_dim=hidden_dim,
             num_heads=num_heads,
             dropout=dropout,

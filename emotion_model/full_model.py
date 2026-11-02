@@ -161,10 +161,14 @@ class MultiLabelEmotionModel(nn.Module):
                     vision_model=self.encoder.visual_encoder.vision_model,
                     text_model=self.encoder.text_encoder.text_model,
                 )
-                # 冻结主干：仅适配器、层归一化与视觉投影层可训练
+                # 冻结主干：仅适配器与投影层可训练；
+                # 主干 LayerNorm 是否解冻由 adapter_unfreeze_layer_norm 控制（默认关闭）
                 self.vl_adapter.freeze_backbone(
                     self.encoder.visual_encoder.vision_model,
                     self.encoder.text_encoder.text_model,
+                    unfreeze_layer_norm=getattr(
+                        model_config, "adapter_unfreeze_layer_norm", False
+                    ),
                 )
                 self.vl_adapter.set_domain(getattr(model_config, "adapter_domain", 0))
                 self._adapter_attached = True
@@ -198,6 +202,7 @@ class MultiLabelEmotionModel(nn.Module):
                 dropout=model_config.fusion_dropout,
                 num_layers=model_config.fusion_num_layers,
                 fusion_output_dim=fusion_dim,
+                visual_global_dim=model_config.projection_dim,
             )
 
         # ---- 3. 标签关联建模（环形分类头自带标签关联，避免重复）----

@@ -672,15 +672,20 @@ def verify_vl_adapter(report: VerificationReport):
         visual_dim=D_v, text_dim=D_t, num_layers=12,
         bottleneck_ratio=4, num_domains=4, domain_rank=4,
     )
-    # 真实 CLIP ViT-B/32 主干参数量约 125.6M
-    backbone_params = 87_800_000 + 37_800_000
+    # 真实 CLIP ViT-B/32 主干参数量（实测 enumerate）：
+    #   视觉塔 vision_model 87,456,000 + 文本塔 text_model 63,165,952 = 150,621,952
+    # 早期版本此处误用 125,600,000，导致占比虚高为 4.57%；修正后为 3.99%
+    backbone_visual, backbone_text = 87_456_000, 63_165_952
+    backbone_params = backbone_visual + backbone_text
     summary = manager.parameter_summary(backbone_params=backbone_params)
 
     report.check("视觉/文本适配器各 12 层",
                  len(manager.visual_adapters) == 12 and len(manager.text_adapters) == 12)
     report.check("★ 可训练参数占比符合申请书要求（3%~5%）",
                  3.0 <= summary["ratio_percent"] <= 5.0,
-                 f"{summary['ratio_percent']:.2f}%（可训练 {summary['trainable']:,} / 主干 {backbone_params:,}）")
+                 f"{summary['ratio_percent']:.2f}%"
+                 f"（可训练 {summary['trainable']:,} / 主干+适配器 {backbone_params + summary['trainable']:,}，"
+                 f"主干单算 {summary['trainable']/backbone_params*100:.2f}%）")
     report.check("共享参数占比记录", summary["trainable_shared"] > 0,
                  f"共享 {summary['trainable_shared']:,} / 域特定 {summary['trainable_domain']:,}")
 

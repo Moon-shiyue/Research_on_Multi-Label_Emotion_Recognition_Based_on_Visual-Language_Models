@@ -379,12 +379,21 @@ class VLAdapterManager(nn.Module):
         self._handles = []
         self._hooked = False
 
-    def freeze_backbone(self, *models):
+    def freeze_backbone(self, *models, unfreeze_layer_norm: bool = False):
         """
-        冻结 CLIP 主干参数，仅保留适配器与投影层可训练
+        冻结 CLIP 主干参数，仅保留适配器（以及可选的层归一化）可训练
+
+        依据 CLIP-Adapter（Gao et al.）与 TIP-Adapter 的做法：主干权重冻结，
+        但 LayerNorm 的仿射参数（weight/bias）保持可训练。这类参数极少
+        （ViT-B/32 视觉塔 26 个 LN 共 39,936 个参数，文本塔 25 个 LN 共 25,600 个），
+        却能让适配器注入的新分布被逐层重新归一化，避免与原主干统计量错配。
 
         Args:
             *models: 需要冻结的模型（视觉塔、文本塔）
+            unfreeze_layer_norm: 是否解冻主干 LayerNorm 仿射参数。
+                True 为 CLIP-Adapter 做法，额外放开 65,536 个参数；
+                False（默认）则主干完全冻结，即严格版 PEFT。
+                默认 False 的实测依据见 config.ModelConfig.adapter_unfreeze_layer_norm。
         """
         for model in models:
             if model is None:
@@ -392,9 +401,32 @@ class VLAdapterManager(nn.Module):
             for param in model.parameters():
                 param.requires_grad = False
 
+        # 主干中的 LayerNorm 仿射参数保持可训练（可关闭，用于消融对照）
+        if unfreeze_layer_norm:
+            for model in models:
+                if model is None:
+                    continue
+                for module in model.modules():
+                    if isinstance(module, nn.LayerNorm):
+                        for param in module.parameters(recurse=False):
+                            param.requires_grad = True
+
         # 适配器与投影层保持可训练
         for param in self.parameters():
             param.requires_grad = True
+
+    def layer_norm_parameters(self, *models):
+        """列出主干中当前可训练的 LayerNorm 仿射参数（用于打印对账）"""
+        params = []
+        for model in models:
+            if model is None:
+                continue
+            for module in model.modules():
+                if isinstance(module, nn.LayerNorm):
+                    params.extend(
+                        p for p in module.parameters(recurse=False) if p.requires_grad
+                    )
+        return params
 
     # ---------------- 场景（域）管理 ----------------
 

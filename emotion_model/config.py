@@ -289,10 +289,20 @@ class ModelConfig:
 
     # ---- 模块③ VL-Adapter 跨场景泛化 ----
     use_vl_adapter: bool = False           # 启用参数解耦型适配器
-    adapter_bottleneck_ratio: int = 4      # 瓶颈压缩比（4 → 约 4.6% 可训练参数）
+    adapter_bottleneck_ratio: int = 4      # 瓶颈压缩比（4 → 适配器 6,017,280 参数，约占总量 3.55%）
     adapter_num_domains: int = 4           # 场景（域）数量
     adapter_domain_rank: int = 4           # 域特定低秩分支秩
     adapter_domain: int = 0                # 当前场景编号
+    adapter_unfreeze_layer_norm: bool = False
+    #   是否解冻主干 LayerNorm 的仿射参数（CLIP-Adapter / TIP-Adapter 做法）
+    #   视觉塔 26 个 LN 共 39,936、文本塔 25 个 LN 共 25,600，合计仅 65,536 参数。
+    #
+    #   默认 False（主干完全冻结）。实测依据（ArtPhoto 固定划分，测试集 118 张，
+    #   2000 次 bootstrap）：
+    #     - 完整结构下解冻：F1 0.2954 -> 0.2978（Δ+0.0025，95%CI 跨 0，P=0.581）不显著
+    #     - 关模块①结构下解冻：F1 0.3164 -> 0.2726（Δ−0.0439，95%CI 全负，P=0.018）显著变差
+    #   结论：本任务训练集仅 548 张，解冻 LN 带来的额外自由度主要被用于拟合训练集，
+    #   无稳定收益。保留该开关供跨场景数据充足时复验，生产路径不启用。
 
     # ---- 标签体系 ----
     # 全项目统一采用 Mikels 8 类基础情感（由 num_emotions / emotion_labels 决定），
@@ -362,10 +372,14 @@ def create_ablation_configs() -> dict:
         "w/o_vl_adapter": create_full_config(use_vl_adapter=False),
         "w/o_contrastive": create_full_config(use_conflict_contrastive=False),
         # 消融基线：关闭全部核心模块，标签空间仍为 8 类
+        # 主干冻结设置须与 create_full_config 保持一致（freeze_visual/freeze_text=True），
+        # 否则基线的可训练参数会变成全量 172.7M 而非 19.4M，消融对比不成立
         "baseline": ModelConfig(
             use_conflict_fusion=False,
             use_circular_head=False,
             use_vl_adapter=False,
+            freeze_visual=True,
+            freeze_text=True,
         ),
     }
 
