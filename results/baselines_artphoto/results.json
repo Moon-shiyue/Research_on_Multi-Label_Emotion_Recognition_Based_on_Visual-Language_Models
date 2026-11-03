@@ -1,0 +1,812 @@
+{
+  "meta": {
+    "image_dir": "testImages_artphoto",
+    "splits_file": "fixed_splits.json",
+    "clip_model_name": "openai/clip-vit-base-patch32",
+    "labels": [
+      "amusement",
+      "excitement",
+      "anger",
+      "disgust",
+      "fear",
+      "sadness",
+      "awe",
+      "contentment"
+    ],
+    "n_train": 548,
+    "n_val": 117,
+    "n_test": 118,
+    "seeds": [
+      42,
+      2026,
+      7
+    ],
+    "probe_epochs": 200,
+    "metric_protocol": "阈值在验证集上搜索后仅应用一次到测试集；测试集不参与任何选择。探测头轮次按验证集 mAP 选择（阈值无关指标）。",
+    "timestamp": "2026-11-03 20:55:37"
+  },
+  "results": [
+    {
+      "name": "B1",
+      "description": "CLIP 零样本 top-1（图文余弦相似度取最大，不训练、不设阈值）",
+      "n_trainable_params": 0,
+      "threshold": NaN,
+      "threshold_source": "无（只做 argmax 决策，报告排序类指标与 top-1）",
+      "applies_threshold": false,
+      "avg_predicted_labels": 1.0,
+      "metrics": {
+        "accuracy_subset": 0.3813559322033898,
+        "hamming_loss": 0.15466101694915255,
+        "f1_micro": 0.3813559322033898,
+        "f1_macro": 0.3158010000751936,
+        "f1_samples": 0.3813559322033898,
+        "precision_micro": 0.3813559322033898,
+        "recall_micro": 0.3813559322033898,
+        "precision_macro": 0.4129464285714286,
+        "recall_macro": 0.3625,
+        "mAP": 0.2949675781937176,
+        "auc_macro": 0.6605566514905561,
+        "auc_per_label_mean": 0.6605566514905561,
+        "coverage_error": 2.8559322033898304,
+        "ranking_loss": 0.26513317191283287,
+        "top1_accuracy": 0.3813559322033898,
+        "top1_macro_f1": 0.3158010000751936,
+        "avg_predicted_labels": 1.0
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.3813559322033898,
+        "hamming_loss": 0.15466101694915255,
+        "f1_micro": 0.3813559322033898,
+        "f1_macro": 0.3158010000751936,
+        "f1_samples": 0.3813559322033898,
+        "precision_micro": 0.3813559322033898,
+        "recall_micro": 0.3813559322033898,
+        "precision_macro": 0.4129464285714286,
+        "recall_macro": 0.3625,
+        "mAP": 0.2949675781937176,
+        "auc_macro": 0.6605566514905561,
+        "auc_per_label_mean": 0.6605566514905561,
+        "coverage_error": 2.8559322033898304,
+        "ranking_loss": 0.26513317191283287,
+        "top1_accuracy": 0.3813559322033898,
+        "top1_macro_f1": 0.3158010000751936,
+        "avg_predicted_labels": 1.0
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.25,
+          "recall": 0.26666666666666666,
+          "f1": 0.25806451612903225,
+          "support": 15
+        },
+        "excitement": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 15
+        },
+        "anger": {
+          "precision": 0.38095238095238093,
+          "recall": 0.6666666666666666,
+          "f1": 0.48484848484848486,
+          "support": 12
+        },
+        "disgust": {
+          "precision": 1.0,
+          "recall": 0.1,
+          "f1": 0.18181818181818182,
+          "support": 10
+        },
+        "fear": {
+          "precision": 0.5333333333333333,
+          "recall": 0.5,
+          "f1": 0.5161290322580645,
+          "support": 16
+        },
+        "sadness": {
+          "precision": 0.7142857142857143,
+          "recall": 0.4,
+          "f1": 0.5128205128205128,
+          "support": 25
+        },
+        "awe": {
+          "precision": 0.325,
+          "recall": 0.8666666666666667,
+          "f1": 0.4727272727272727,
+          "support": 15
+        },
+        "contentment": {
+          "precision": 0.1,
+          "recall": 0.1,
+          "f1": 0.1,
+          "support": 10
+        }
+      }
+    },
+    {
+      "name": "B2",
+      "description": "CLIP 零样本 + 验证集阈值搜索（仍不训练）",
+      "n_trainable_params": 0,
+      "threshold": 0.23929530412108457,
+      "threshold_source": "验证集搜索（验证集 macro F1=0.3350）",
+      "applies_threshold": true,
+      "avg_predicted_labels": 0.9237288236618042,
+      "metrics": {
+        "accuracy_subset": 0.0847457627118644,
+        "hamming_loss": 0.1620762711864407,
+        "f1_micro": 0.32599118942731276,
+        "f1_macro": 0.29037847315286336,
+        "f1_samples": 0.2060734463276836,
+        "precision_micro": 0.3394495412844037,
+        "recall_micro": 0.3135593220338983,
+        "precision_macro": 0.2993095672443499,
+        "recall_macro": 0.30510416666666673,
+        "mAP": 0.2949675781937176,
+        "auc_macro": 0.6605566514905561,
+        "auc_per_label_mean": 0.6605566514905561,
+        "coverage_error": 2.8559322033898304,
+        "ranking_loss": 0.26513317191283287,
+        "top1_accuracy": 0.3813559322033898,
+        "top1_macro_f1": 0.3158010000751936,
+        "avg_predicted_labels": 0.9237288236618042
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.0,
+        "hamming_loss": 0.125,
+        "f1_micro": 0.0,
+        "f1_macro": 0.0,
+        "f1_samples": 0.0,
+        "precision_micro": 0.0,
+        "recall_micro": 0.0,
+        "precision_macro": 0.0,
+        "recall_macro": 0.0,
+        "mAP": 0.2949675781937176,
+        "auc_macro": 0.6605566514905561,
+        "auc_per_label_mean": 0.6605566514905561,
+        "coverage_error": 2.8559322033898304,
+        "ranking_loss": 0.26513317191283287,
+        "top1_accuracy": 0.3813559322033898,
+        "top1_macro_f1": 0.3158010000751936,
+        "avg_predicted_labels": 0.0
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.46153846153846156,
+          "recall": 0.4,
+          "f1": 0.42857142857142855,
+          "support": 15
+        },
+        "excitement": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 15
+        },
+        "anger": {
+          "precision": 0.30434782608695654,
+          "recall": 0.5833333333333334,
+          "f1": 0.4,
+          "support": 12
+        },
+        "disgust": {
+          "precision": 0.3333333333333333,
+          "recall": 0.2,
+          "f1": 0.25,
+          "support": 10
+        },
+        "fear": {
+          "precision": 0.30434782608695654,
+          "recall": 0.4375,
+          "f1": 0.358974358974359,
+          "support": 16
+        },
+        "sadness": {
+          "precision": 0.5,
+          "recall": 0.32,
+          "f1": 0.3902439024390244,
+          "support": 25
+        },
+        "awe": {
+          "precision": 0.4,
+          "recall": 0.4,
+          "f1": 0.4,
+          "support": 15
+        },
+        "contentment": {
+          "precision": 0.09090909090909091,
+          "recall": 0.1,
+          "f1": 0.09523809523809523,
+          "support": 10
+        }
+      }
+    },
+    {
+      "name": "B3",
+      "description": "冻结 CLIP 特征 + 线性层（Linear 768→8）；3 个随机种子的均值 ± 标准差",
+      "n_trainable_params": 6152,
+      "threshold": 0.8159200955576996,
+      "threshold_source": "每种子独立在验证集搜索阈值后应用；阈值均值 0.8159 ± 0.0297",
+      "applies_threshold": true,
+      "avg_predicted_labels": 0.7796609997749329,
+      "metrics": {
+        "accuracy_subset": 0.25706214689265533,
+        "hamming_loss": 0.1292372881355932,
+        "f1_micro": 0.4165680404715493,
+        "f1_macro": 0.4050645802840012,
+        "f1_samples": 0.3342749529190207,
+        "precision_micro": 0.4788769805616167,
+        "recall_micro": 0.37288135593220345,
+        "precision_macro": 0.4611277883336707,
+        "recall_macro": 0.37809027777777776,
+        "mAP": 0.4344273120419997,
+        "auc_macro": 0.8007450912612041,
+        "auc_per_label_mean": 0.8007450912612041,
+        "coverage_error": 2.4915254237288136,
+        "ranking_loss": 0.21307506053268763,
+        "top1_accuracy": 0.4378531073446328,
+        "top1_macro_f1": 0.4291547639504265,
+        "avg_predicted_labels": 0.7796609997749329,
+        "f1_macro_std": 0.038177477018168426,
+        "f1_micro_std": 0.03610307891819176,
+        "mAP_std": 0.0025481677190521733
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.019774011299435026,
+        "hamming_loss": 0.2959039548022599,
+        "f1_micro": 0.3874146232224835,
+        "f1_macro": 0.3836139846627457,
+        "f1_samples": 0.39977132095776163,
+        "precision_micro": 0.2613312387269448,
+        "recall_micro": 0.7485875706214689,
+        "precision_macro": 0.26229591940184704,
+        "recall_macro": 0.7504861111111111,
+        "mAP": 0.4344273120419997,
+        "auc_macro": 0.8007450912612041,
+        "auc_per_label_mean": 0.8007450912612041,
+        "coverage_error": 2.4915254237288136,
+        "ranking_loss": 0.21307506053268763,
+        "top1_accuracy": 0.4378531073446328,
+        "top1_macro_f1": 0.4291547639504265,
+        "avg_predicted_labels": 2.8644068241119385
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.5644078144078145,
+          "recall": 0.48888888888888893,
+          "f1": 0.5234142188165176,
+          "support": 15.0
+        },
+        "excitement": {
+          "precision": 0.38311688311688313,
+          "recall": 0.2222222222222222,
+          "f1": 0.27911219215567046,
+          "support": 15.0
+        },
+        "anger": {
+          "precision": 0.3592592592592592,
+          "recall": 0.3055555555555555,
+          "f1": 0.32900432900432897,
+          "support": 12.0
+        },
+        "disgust": {
+          "precision": 0.5373737373737374,
+          "recall": 0.6333333333333333,
+          "f1": 0.5771428571428572,
+          "support": 10.0
+        },
+        "fear": {
+          "precision": 0.40359477124183013,
+          "recall": 0.3125,
+          "f1": 0.34826284826284826,
+          "support": 16.0
+        },
+        "sadness": {
+          "precision": 0.6611111111111111,
+          "recall": 0.44,
+          "f1": 0.5227832483646436,
+          "support": 25.0
+        },
+        "awe": {
+          "precision": 0.36507936507936506,
+          "recall": 0.22222222222222224,
+          "f1": 0.25830140485312897,
+          "support": 15.0
+        },
+        "contentment": {
+          "precision": 0.4150793650793651,
+          "recall": 0.39999999999999997,
+          "f1": 0.4024955436720143,
+          "support": 10.0
+        }
+      }
+    },
+    {
+      "name": "B4",
+      "description": "冻结 CLIP 特征 + MLP（768→256→8，含 dropout 0.1）；3 个随机种子的均值 ± 标准差",
+      "n_trainable_params": 198920,
+      "threshold": 0.21556586852383333,
+      "threshold_source": "每种子独立在验证集搜索阈值后应用；阈值均值 0.2156 ± 0.0599",
+      "applies_threshold": true,
+      "avg_predicted_labels": 1.1242937843004863,
+      "metrics": {
+        "accuracy_subset": 0.3361581920903955,
+        "hamming_loss": 0.1384180790960452,
+        "f1_micro": 0.4787050745305015,
+        "f1_macro": 0.4675401991170481,
+        "f1_samples": 0.4491525423728813,
+        "precision_micro": 0.4594911230496495,
+        "recall_micro": 0.5084745762711864,
+        "precision_macro": 0.45592763109210477,
+        "recall_macro": 0.49756944444444445,
+        "mAP": 0.4580479709895133,
+        "auc_macro": 0.8274358368319369,
+        "auc_per_label_mean": 0.8274358368319369,
+        "coverage_error": 2.387005649717514,
+        "ranking_loss": 0.19814366424535912,
+        "top1_accuracy": 0.45762711864406774,
+        "top1_macro_f1": 0.4486160415926958,
+        "avg_predicted_labels": 1.1242937843004863,
+        "f1_macro_std": 0.0038950199936075643,
+        "f1_micro_std": 0.0017977052104267833,
+        "mAP_std": 0.004953132124321074
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.34180790960451973,
+        "hamming_loss": 0.120409604519774,
+        "f1_micro": 0.42869403673841955,
+        "f1_macro": 0.41885967258612417,
+        "f1_samples": 0.35499058380414317,
+        "precision_micro": 0.5275419025419025,
+        "recall_micro": 0.3615819209039548,
+        "precision_macro": 0.5259197947520315,
+        "recall_macro": 0.3546180555555556,
+        "mAP": 0.4580479709895133,
+        "auc_macro": 0.8274358368319369,
+        "auc_per_label_mean": 0.8274358368319369,
+        "coverage_error": 2.387005649717514,
+        "ranking_loss": 0.19814366424535912,
+        "top1_accuracy": 0.45762711864406774,
+        "top1_macro_f1": 0.4486160415926958,
+        "avg_predicted_labels": 0.686440666516622
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.5676169590643274,
+          "recall": 0.5777777777777778,
+          "f1": 0.5675498395295991,
+          "support": 15.0
+        },
+        "excitement": {
+          "precision": 0.44425019425019424,
+          "recall": 0.35555555555555557,
+          "f1": 0.3945190611857279,
+          "support": 15.0
+        },
+        "anger": {
+          "precision": 0.40135327635327633,
+          "recall": 0.4166666666666667,
+          "f1": 0.40317460317460313,
+          "support": 12.0
+        },
+        "disgust": {
+          "precision": 0.5091575091575092,
+          "recall": 0.5333333333333333,
+          "f1": 0.5076726342710998,
+          "support": 10.0
+        },
+        "fear": {
+          "precision": 0.4433811802232855,
+          "recall": 0.5416666666666666,
+          "f1": 0.48674627745835175,
+          "support": 16.0
+        },
+        "sadness": {
+          "precision": 0.5789141414141414,
+          "recall": 0.6,
+          "f1": 0.5853996693862314,
+          "support": 25.0
+        },
+        "awe": {
+          "precision": 0.33867521367521364,
+          "recall": 0.48888888888888893,
+          "f1": 0.39503856577027313,
+          "support": 15.0
+        },
+        "contentment": {
+          "precision": 0.36407257459889036,
+          "recall": 0.4666666666666666,
+          "f1": 0.4002209421604987,
+          "support": 10.0
+        }
+      }
+    },
+    {
+      "name": "FULL",
+      "description": "完整模型（CLIP + 冲突感知融合 + 环形双头 + VL-Adapter，读取已交付的 holdout_predictions.npz，套用同一阈值协议）",
+      "n_trainable_params": 19095572,
+      "threshold": 0.11084694797219949,
+      "threshold_source": "验证集搜索（验证集 macro F1=0.3481）",
+      "applies_threshold": true,
+      "avg_predicted_labels": 3.203389883041382,
+      "metrics": {
+        "accuracy_subset": 0.0,
+        "hamming_loss": 0.3686440677966102,
+        "f1_micro": 0.29838709677419356,
+        "f1_macro": 0.2955156117333282,
+        "f1_samples": 0.29802259887005644,
+        "precision_micro": 0.19576719576719576,
+        "recall_micro": 0.6271186440677966,
+        "precision_macro": 0.20543245565881282,
+        "recall_macro": 0.6280208333333334,
+        "mAP": 0.25344787435784744,
+        "auc_macro": 0.6637990494392478,
+        "auc_per_label_mean": 0.6637990494392478,
+        "coverage_error": 3.4152542372881354,
+        "ranking_loss": 0.34503631961259074,
+        "top1_accuracy": 0.2457627118644068,
+        "top1_macro_f1": 0.15335745790597544,
+        "avg_predicted_labels": 3.203389883041382
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.07627118644067797,
+        "hamming_loss": 0.21927966101694915,
+        "f1_micro": 0.24175824175824176,
+        "f1_macro": 0.16727865022263233,
+        "f1_samples": 0.211864406779661,
+        "precision_micro": 0.2129032258064516,
+        "recall_micro": 0.2796610169491525,
+        "precision_macro": 0.1302444079241255,
+        "recall_macro": 0.2689583333333333,
+        "mAP": 0.25344787435784744,
+        "auc_macro": 0.6637990494392478,
+        "auc_per_label_mean": 0.6637990494392478,
+        "coverage_error": 3.4152542372881354,
+        "ranking_loss": 0.34503631961259074,
+        "top1_accuracy": 0.2457627118644068,
+        "top1_macro_f1": 0.15335745790597544,
+        "avg_predicted_labels": 1.3135592937469482
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.1702127659574468,
+          "recall": 0.5333333333333333,
+          "f1": 0.25806451612903225,
+          "support": 15
+        },
+        "excitement": {
+          "precision": 0.29411764705882354,
+          "recall": 0.3333333333333333,
+          "f1": 0.3125,
+          "support": 15
+        },
+        "anger": {
+          "precision": 0.23809523809523808,
+          "recall": 0.4166666666666667,
+          "f1": 0.30303030303030304,
+          "support": 12
+        },
+        "disgust": {
+          "precision": 0.1794871794871795,
+          "recall": 0.7,
+          "f1": 0.2857142857142857,
+          "support": 10
+        },
+        "fear": {
+          "precision": 0.19642857142857142,
+          "recall": 0.6875,
+          "f1": 0.3055555555555556,
+          "support": 16
+        },
+        "sadness": {
+          "precision": 0.24324324324324326,
+          "recall": 0.72,
+          "f1": 0.36363636363636365,
+          "support": 25
+        },
+        "awe": {
+          "precision": 0.171875,
+          "recall": 0.7333333333333333,
+          "f1": 0.27848101265822783,
+          "support": 15
+        },
+        "contentment": {
+          "precision": 0.15,
+          "recall": 0.9,
+          "f1": 0.2571428571428571,
+          "support": 10
+        }
+      }
+    },
+    {
+      "name": "R1",
+      "description": "永远预测训练集最频繁类（sadness）",
+      "n_trainable_params": 0,
+      "threshold": 0.5,
+      "threshold_source": "恒定预测，无阈值决策",
+      "applies_threshold": true,
+      "avg_predicted_labels": 1.0,
+      "metrics": {
+        "accuracy_subset": 0.211864406779661,
+        "hamming_loss": 0.19703389830508475,
+        "f1_micro": 0.211864406779661,
+        "f1_macro": 0.043706293706293704,
+        "f1_samples": 0.211864406779661,
+        "precision_micro": 0.211864406779661,
+        "recall_micro": 0.211864406779661,
+        "precision_macro": 0.026483050847457626,
+        "recall_macro": 0.125,
+        "mAP": 0.125,
+        "auc_macro": 0.5,
+        "auc_per_label_mean": 0.5,
+        "coverage_error": 6.516949152542373,
+        "ranking_loss": 0.788135593220339,
+        "top1_accuracy": 0.211864406779661,
+        "top1_macro_f1": 0.043706293706293704,
+        "avg_predicted_labels": 1.0
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.211864406779661,
+        "hamming_loss": 0.19703389830508475,
+        "f1_micro": 0.211864406779661,
+        "f1_macro": 0.043706293706293704,
+        "f1_samples": 0.211864406779661,
+        "precision_micro": 0.211864406779661,
+        "recall_micro": 0.211864406779661,
+        "precision_macro": 0.026483050847457626,
+        "recall_macro": 0.125,
+        "mAP": 0.125,
+        "auc_macro": 0.5,
+        "auc_per_label_mean": 0.5,
+        "coverage_error": 6.516949152542373,
+        "ranking_loss": 0.788135593220339,
+        "top1_accuracy": 0.211864406779661,
+        "top1_macro_f1": 0.043706293706293704,
+        "avg_predicted_labels": 1.0
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 15
+        },
+        "excitement": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 15
+        },
+        "anger": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 12
+        },
+        "disgust": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 10
+        },
+        "fear": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 16
+        },
+        "sadness": {
+          "precision": 0.211864406779661,
+          "recall": 1.0,
+          "f1": 0.34965034965034963,
+          "support": 25
+        },
+        "awe": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 15
+        },
+        "contentment": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 10
+        }
+      }
+    },
+    {
+      "name": "R2",
+      "description": "均匀随机猜一个类",
+      "n_trainable_params": 0,
+      "threshold": 0.5,
+      "threshold_source": "恒定预测，无阈值决策",
+      "applies_threshold": true,
+      "avg_predicted_labels": 1.0,
+      "metrics": {
+        "accuracy_subset": 0.1694915254237288,
+        "hamming_loss": 0.2076271186440678,
+        "f1_micro": 0.1694915254237288,
+        "f1_macro": 0.15165631469979296,
+        "f1_samples": 0.1694915254237288,
+        "precision_micro": 0.1694915254237288,
+        "recall_micro": 0.1694915254237288,
+        "precision_macro": 0.15531588509529687,
+        "recall_macro": 0.15822916666666667,
+        "mAP": 0.14309907925553178,
+        "auc_macro": 0.520038502617539,
+        "auc_per_label_mean": 0.520038502617539,
+        "coverage_error": 6.813559322033898,
+        "ranking_loss": 0.8305084745762712,
+        "top1_accuracy": 0.1694915254237288,
+        "top1_macro_f1": 0.15165631469979296,
+        "avg_predicted_labels": 1.0
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.1694915254237288,
+        "hamming_loss": 0.2076271186440678,
+        "f1_micro": 0.1694915254237288,
+        "f1_macro": 0.15165631469979296,
+        "f1_samples": 0.1694915254237288,
+        "precision_micro": 0.1694915254237288,
+        "recall_micro": 0.1694915254237288,
+        "precision_macro": 0.15531588509529687,
+        "recall_macro": 0.15822916666666667,
+        "mAP": 0.14309907925553178,
+        "auc_macro": 0.520038502617539,
+        "auc_per_label_mean": 0.520038502617539,
+        "coverage_error": 6.813559322033898,
+        "ranking_loss": 0.8305084745762712,
+        "top1_accuracy": 0.1694915254237288,
+        "top1_macro_f1": 0.15165631469979296,
+        "avg_predicted_labels": 1.0
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 15
+        },
+        "excitement": {
+          "precision": 0.29411764705882354,
+          "recall": 0.3333333333333333,
+          "f1": 0.3125,
+          "support": 15
+        },
+        "anger": {
+          "precision": 0.09090909090909091,
+          "recall": 0.08333333333333333,
+          "f1": 0.08695652173913043,
+          "support": 12
+        },
+        "disgust": {
+          "precision": 0.09090909090909091,
+          "recall": 0.2,
+          "f1": 0.125,
+          "support": 10
+        },
+        "fear": {
+          "precision": 0.08333333333333333,
+          "recall": 0.0625,
+          "f1": 0.07142857142857142,
+          "support": 16
+        },
+        "sadness": {
+          "precision": 0.47058823529411764,
+          "recall": 0.32,
+          "f1": 0.38095238095238093,
+          "support": 25
+        },
+        "awe": {
+          "precision": 0.058823529411764705,
+          "recall": 0.06666666666666667,
+          "f1": 0.0625,
+          "support": 15
+        },
+        "contentment": {
+          "precision": 0.15384615384615385,
+          "recall": 0.2,
+          "f1": 0.17391304347826086,
+          "support": 10
+        }
+      }
+    },
+    {
+      "name": "R3",
+      "description": "预测全部 8 个标签均为正",
+      "n_trainable_params": 0,
+      "threshold": 0.5,
+      "threshold_source": "恒定预测，无阈值决策",
+      "applies_threshold": true,
+      "avg_predicted_labels": 8.0,
+      "metrics": {
+        "accuracy_subset": 0.0,
+        "hamming_loss": 0.875,
+        "f1_micro": 0.2222222222222222,
+        "f1_macro": 0.22028292921728704,
+        "f1_samples": 0.22222222222222224,
+        "precision_micro": 0.125,
+        "recall_micro": 1.0,
+        "precision_macro": 0.125,
+        "recall_macro": 1.0,
+        "mAP": 0.125,
+        "auc_macro": 0.5,
+        "auc_per_label_mean": 0.5,
+        "coverage_error": 8.0,
+        "ranking_loss": 1.0,
+        "top1_accuracy": 0.1271186440677966,
+        "top1_macro_f1": 0.02819548872180451,
+        "avg_predicted_labels": 8.0
+      },
+      "metrics_at_threshold_0.5": {
+        "accuracy_subset": 0.0,
+        "hamming_loss": 0.875,
+        "f1_micro": 0.2222222222222222,
+        "f1_macro": 0.22028292921728704,
+        "f1_samples": 0.22222222222222224,
+        "precision_micro": 0.125,
+        "recall_micro": 1.0,
+        "precision_macro": 0.125,
+        "recall_macro": 1.0,
+        "mAP": 0.125,
+        "auc_macro": 0.5,
+        "auc_per_label_mean": 0.5,
+        "coverage_error": 8.0,
+        "ranking_loss": 1.0,
+        "top1_accuracy": 0.1271186440677966,
+        "top1_macro_f1": 0.02819548872180451,
+        "avg_predicted_labels": 8.0
+      },
+      "per_label": {
+        "amusement": {
+          "precision": 0.1271186440677966,
+          "recall": 1.0,
+          "f1": 0.22556390977443608,
+          "support": 15
+        },
+        "excitement": {
+          "precision": 0.1271186440677966,
+          "recall": 1.0,
+          "f1": 0.22556390977443608,
+          "support": 15
+        },
+        "anger": {
+          "precision": 0.1016949152542373,
+          "recall": 1.0,
+          "f1": 0.18461538461538463,
+          "support": 12
+        },
+        "disgust": {
+          "precision": 0.0847457627118644,
+          "recall": 1.0,
+          "f1": 0.15625,
+          "support": 10
+        },
+        "fear": {
+          "precision": 0.13559322033898305,
+          "recall": 1.0,
+          "f1": 0.23880597014925373,
+          "support": 16
+        },
+        "sadness": {
+          "precision": 0.211864406779661,
+          "recall": 1.0,
+          "f1": 0.34965034965034963,
+          "support": 25
+        },
+        "awe": {
+          "precision": 0.1271186440677966,
+          "recall": 1.0,
+          "f1": 0.22556390977443608,
+          "support": 15
+        },
+        "contentment": {
+          "precision": 0.0847457627118644,
+          "recall": 1.0,
+          "f1": 0.15625,
+          "support": 10
+        }
+      }
+    }
+  ]
+}

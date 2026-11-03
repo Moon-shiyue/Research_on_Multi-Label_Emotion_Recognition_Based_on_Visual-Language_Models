@@ -1,0 +1,6 @@
+{
+  "reason": "Original checkpoint contained NumPy scalar metadata rejected by weights_only=True",
+  "action": "Normalized scalar metadata in our locally generated checkpoint; no tensor or hyperparameter edits",
+  "validation": "Reloaded with weights_only=True and verified selected learning rate and epoch",
+  "model_weights_changed": false
+}

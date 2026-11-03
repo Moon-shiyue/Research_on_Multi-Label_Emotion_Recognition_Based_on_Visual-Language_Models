@@ -1,0 +1,24 @@
+{
+  "checks": {
+    "validation_3e-05": true,
+    "validation_0.0001": true,
+    "validation_0.0003": true,
+    "selection_uses_validation_only": true,
+    "holdout_metrics_match_predictions": true,
+    "holdout_files_match_manifest": true,
+    "per_class_support_matches": true,
+    "confusion_matrix_count": true,
+    "no_identical_pixels_cross_splits": true,
+    "checkpoint_selection_matches": true,
+    "checkpoint_split_hash_matches": true,
+    "snapshot_model_code_matches_audit": true
+  },
+  "all_passed": true,
+  "recomputed_holdout": {
+    "f1_macro": 0.16727865022263233,
+    "f1_micro": 0.24175824175824176,
+    "mAP": 0.25344787435784744,
+    "auc_macro": 0.6637990494392478,
+    "top1_accuracy": 0.2457627118644068
+  }
+}

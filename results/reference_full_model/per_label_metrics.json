@@ -1,0 +1,50 @@
+{
+  "amusement": {
+    "precision": 0.2692307692307692,
+    "recall": 0.4666666666666667,
+    "f1": 0.34146341463414637,
+    "support": 15
+  },
+  "excitement": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "support": 15
+  },
+  "anger": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "support": 12
+  },
+  "disgust": {
+    "precision": 0.05263157894736842,
+    "recall": 0.1,
+    "f1": 0.06896551724137931,
+    "support": 10
+  },
+  "fear": {
+    "precision": 0.24390243902439024,
+    "recall": 0.625,
+    "f1": 0.3508771929824561,
+    "support": 16
+  },
+  "sadness": {
+    "precision": 0.3333333333333333,
+    "recall": 0.36,
+    "f1": 0.34615384615384615,
+    "support": 25
+  },
+  "awe": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "support": 15
+  },
+  "contentment": {
+    "precision": 0.14285714285714285,
+    "recall": 0.6,
+    "f1": 0.23076923076923078,
+    "support": 10
+  }
+}

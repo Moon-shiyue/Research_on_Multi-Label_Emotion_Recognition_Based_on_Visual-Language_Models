@@ -1,0 +1,149 @@
+{
+  "image_count": 806,
+  "class_counts": {
+    "amusement": 101,
+    "anger": 77,
+    "awe": 102,
+    "contentment": 70,
+    "disgust": 70,
+    "excitement": 105,
+    "fear": 115,
+    "sadness": 166
+  },
+  "unique_pixel_groups": 783,
+  "duplicate_excess_images": 23,
+  "conflicting_label_groups": [],
+  "historical_split_sizes": {
+    "tune_train": 686,
+    "tune_val": 120,
+    "final_train": 566,
+    "final_val": 120,
+    "final_test": 120
+  },
+  "historical_final_test_overlap_with_tuning_validation": 120,
+  "duplicate_split_leakage": {
+    "final_train__final_test": {
+      "shared_pixel_groups": 5,
+      "affected_second_split_images": 5
+    },
+    "final_train__final_val": {
+      "shared_pixel_groups": 3,
+      "affected_second_split_images": 3
+    },
+    "tune_train__tune_val": {
+      "shared_pixel_groups": 8,
+      "affected_second_split_images": 8
+    }
+  },
+  "historical_runs": [
+    {
+      "run": "output_artphoto_final",
+      "epochs": 12,
+      "best_epoch": 12,
+      "best_metrics": {
+        "accuracy_subset": 0.075,
+        "hamming_loss": 0.21458333333333332,
+        "f1_micro": 0.23134328358208955,
+        "f1_macro": 0.18215331824515216,
+        "f1_samples": 0.19722222222222222,
+        "precision_micro": 0.20945945945945946,
+        "recall_micro": 0.25833333333333336,
+        "precision_macro": 0.16486914856480073,
+        "recall_macro": 0.29142992424242425,
+        "mAP": 0.27843890016264217,
+        "auc_macro": 0.7064272473200308,
+        "auc_per_label_mean": 0.7064272473200308,
+        "coverage_error": 3.2416666666666667,
+        "ranking_loss": 0.32023809523809527
+      },
+      "best_metrics_match_history": true,
+      "checkpoint_exists": true
+    },
+    {
+      "run": "output_artphoto_lr1e-4",
+      "epochs": 12,
+      "best_epoch": 8,
+      "best_metrics": {
+        "accuracy_subset": 0.016666666666666666,
+        "hamming_loss": 0.2552083333333333,
+        "f1_micro": 0.3059490084985836,
+        "f1_macro": 0.18781527441485069,
+        "f1_samples": 0.3055555555555555,
+        "precision_micro": 0.2317596566523605,
+        "recall_micro": 0.45,
+        "precision_macro": 0.12345624933630668,
+        "recall_macro": 0.4314289860681114,
+        "mAP": 0.21883468404287787,
+        "auc_macro": 0.6339833423217658,
+        "auc_per_label_mean": 0.6339833423217658,
+        "coverage_error": 3.1,
+        "ranking_loss": 0.3
+      },
+      "best_metrics_match_history": true,
+      "checkpoint_exists": true
+    },
+    {
+      "run": "output_artphoto_lr3e-4",
+      "epochs": 11,
+      "best_epoch": 1,
+      "best_metrics": {
+        "accuracy_subset": 0.0,
+        "hamming_loss": 0.3145833333333333,
+        "f1_micro": 0.16111111111111112,
+        "f1_macro": 0.0537491705374917,
+        "f1_samples": 0.1611111111111111,
+        "precision_micro": 0.12083333333333333,
+        "recall_micro": 0.24166666666666667,
+        "precision_macro": 0.030208333333333334,
+        "recall_macro": 0.25,
+        "mAP": 0.24057990803539556,
+        "auc_macro": 0.6555468718929717,
+        "auc_per_label_mean": 0.6555468718929717,
+        "coverage_error": 4.366666666666666,
+        "ranking_loss": 0.4809523809523809
+      },
+      "best_metrics_match_history": true,
+      "checkpoint_exists": true
+    },
+    {
+      "run": "output_artphoto_lr3e-5",
+      "epochs": 12,
+      "best_epoch": 8,
+      "best_metrics": {
+        "accuracy_subset": 0.11666666666666667,
+        "hamming_loss": 0.209375,
+        "f1_micro": 0.3044982698961938,
+        "f1_macro": 0.2231858054226475,
+        "f1_samples": 0.2833333333333333,
+        "precision_micro": 0.2603550295857988,
+        "recall_micro": 0.36666666666666664,
+        "precision_macro": 0.18118970219528302,
+        "recall_macro": 0.3702721878224974,
+        "mAP": 0.2659335248407154,
+        "auc_macro": 0.7384276232275411,
+        "auc_per_label_mean": 0.7384276232275411,
+        "coverage_error": 2.933333333333333,
+        "ranking_loss": 0.27619047619047615
+      },
+      "best_metrics_match_history": true,
+      "checkpoint_exists": true
+    }
+  ],
+  "source_sha256": {
+    "emotion_model\\base_encoder.py": "0a47f68e26ad23eaa91fc1582a8c59a4becadcacf1798224e676df4a57accdd0",
+    "emotion_model\\circular_head.py": "d0a0ff8efb53d92d2d28e66560a921c91d86a9efe67a9299d71e6b4e75127c53",
+    "emotion_model\\classification_head.py": "3df2d4fdbb59f87a8bed848139c097e213c05973380bdbbbf55bf37372ed83dd",
+    "emotion_model\\config.py": "66c14c821bd0343beb5c7a4c23b73528ede29bfe6b9a5b20cfb0fc437b4f2767",
+    "emotion_model\\conflict_fusion.py": "ad1eab44655b524641aa6f48663fad7f116daead1a0eb5a333adfcea454e24ff",
+    "emotion_model\\dataset.py": "18fd0b3f94282498b0586914af11cd5bd26d6430aed530a66b6b6c5cb308a114",
+    "emotion_model\\full_model.py": "b3fb056b78545b478c9d1afd8a5895730668914c4189d865d12fe492be9d0635",
+    "emotion_model\\fusion_module.py": "8ec2555d4b6949ae35c7ffa3523ac876680796a61030ead4456d2b057e829db9",
+    "emotion_model\\label_association.py": "38606aa278947c49efffc0a2e040d5f0476e88046cfecca83d481377a0feda87",
+    "emotion_model\\train.py": "6d82d1e103ec8afca175a177b47ebd4a23f663732c59308e17c8b60ffa1b79a8",
+    "emotion_model\\utils.py": "48a8e2346613e8d02484da19b9f3379d678837036f059c72d583d7b8d61f1e91",
+    "emotion_model\\verify.py": "a02ad74c67af0fb0f9cbdfb7e9c3fb889fe613354d529e0c603dcc6561b06990",
+    "emotion_model\\verify_modules.py": "d981b20e786539b9eda00addb6d81a16f8640f0a36394739879ee74f5a92a52d",
+    "emotion_model\\vl_adapter.py": "f3eb646cbd2d0d3e8f8992deee0ce6b1f8ef2963c29aef4cd34cfb71ded6b72e",
+    "emotion_model\\__init__.py": "766d8c3ac818666e8c4983c185f2cd35ffa9ab63ca1238bb008f06dd1f8f13e7"
+  }
+}

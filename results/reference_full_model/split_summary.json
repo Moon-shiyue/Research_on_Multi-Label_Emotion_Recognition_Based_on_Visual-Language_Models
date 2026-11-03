@@ -1,0 +1,46 @@
+{
+  "splits": {
+    "train": {
+      "count": 548,
+      "classes": {
+        "amusement": 71,
+        "anger": 54,
+        "awe": 70,
+        "contentment": 49,
+        "disgust": 49,
+        "excitement": 68,
+        "fear": 71,
+        "sadness": 116
+      }
+    },
+    "val": {
+      "count": 117,
+      "classes": {
+        "amusement": 15,
+        "anger": 11,
+        "awe": 15,
+        "contentment": 11,
+        "disgust": 11,
+        "excitement": 14,
+        "fear": 15,
+        "sadness": 25
+      }
+    },
+    "test": {
+      "count": 118,
+      "classes": {
+        "amusement": 15,
+        "anger": 12,
+        "awe": 15,
+        "contentment": 10,
+        "disgust": 10,
+        "excitement": 15,
+        "fear": 16,
+        "sadness": 25
+      }
+    }
+  },
+  "cross_split_pixel_overlap": 0,
+  "checks_passed": true,
+  "unique_images": 783
+}

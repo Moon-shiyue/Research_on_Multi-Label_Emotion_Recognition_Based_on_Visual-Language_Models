@@ -1116,8 +1116,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     results.sort(key=lambda r: (r.name[0] != "B", r.name))
 
     meta = {
-        "image_dir": str(image_dir),
-        "splits_file": str(splits_file),
+        # 只记录目录名 / 文件名，不写入绝对路径：绝对路径含本机用户名，
+        # 提交到公开仓库会泄漏个人信息。需要复现时按 README 的相对路径约定即可。
+        "image_dir": image_dir.name,
+        "splits_file": splits_file.name,
         "clip_model_name": args.clip_model,
         "labels": list(labels),
         "n_train": len(splits["train"]),

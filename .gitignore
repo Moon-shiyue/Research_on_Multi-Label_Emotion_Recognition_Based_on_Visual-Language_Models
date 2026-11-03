@@ -63,8 +63,15 @@ logs/
 
 # Output
 output/
-results/
 generated/
+
+# results/ 需要入库：只含指标 JSON 与预测 npz，是实验结论的唯一凭证。
+# 下面排除体积大、可重新生成的部分。
+results/**/features/
+results/**/*.pth
+results/**/*.pt
+results/**/*.ckpt
+results/**/*.safetensors
 
 # 内部材料（进展汇报、会议纪要等，不上传）
 我的分工.txt
